@@ -1,0 +1,22 @@
+{
+  "name": "citepocket",
+  "version": "1.0.0",
+  "description": "A companion citation picker for Zotero + Google Docs on Android. Copies RTF/ODF-Scan citation markers to the clipboard.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
+  }
+}
