@@ -1,0 +1,32 @@
+name: Deploy to sota.io
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sota-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to sota.io
+        env:
+          SOTA_API_KEY: ${{ secrets.SOTA_API_KEY }}
+        run: |
+          npm install --no-save @sota-io/sdk
+          node scripts/sota-deploy.mjs
