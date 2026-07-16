@@ -27,6 +27,8 @@ jobs:
       - name: Deploy to sota.io
         env:
           SOTA_API_KEY: ${{ secrets.SOTA_API_KEY }}
+          SOTA_PROJECT_NAME: ZoteroAddon
+          SOTA_PROJECT_ID: 645ec5bb-ad13-4115-9012-99718c01e1c9
         run: |
           npm install --no-save @sota-io/sdk
           node scripts/sota-deploy.mjs
