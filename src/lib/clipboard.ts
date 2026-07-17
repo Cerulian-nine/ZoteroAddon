@@ -93,6 +93,38 @@ export function downloadTextFile(filename: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/**
+ * Save `text` as a file, hand it back to the user, and report whether a save
+ * actually happened.
+ *
+ * On Android — the target device — an `<a download>` on a blob URL is
+ * unreliable inside an installed PWA/WebView: the tap often does nothing, so
+ * the download "button" looks broken. The Web Share API is the dependable path
+ * there (it opens the system sheet: save to Files/Drive, or send on), so we
+ * prefer it when the platform can share files and fall back to the anchor
+ * download on desktop. A dismissed share sheet resolves to `false` so the
+ * caller doesn't claim a save that didn't occur.
+ */
+export async function saveTextFile(filename: string, text: string): Promise<boolean> {
+  try {
+    const file = new File([text], filename, { type: 'text/plain;charset=utf-8' });
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      navigator.canShare?.({ files: [file] })
+    ) {
+      await navigator.share({ files: [file], title: filename });
+      return true;
+    }
+  } catch (err) {
+    // The user dismissing the share sheet is a cancel, not a failure — don't
+    // then also fire a download. Any other error falls through to the anchor.
+    if (err instanceof Error && err.name === 'AbortError') return false;
+  }
+  downloadTextFile(filename, text);
+  return true;
+}
+
 /** Short haptic tick on copy, where supported (guarded per spec). */
 export function vibrate(): void {
   try {

@@ -56,15 +56,22 @@ per the owner's instruction on 2026-07-17.
   document** (.docx / .odt / .txt/.md) parses the file in-browser and
   holds the text in module state; a loaded-document card (file icon,
   name, word count, remove ×) shows what's loaded, and Scan/Convert stay
-  disabled until a document is. Nothing is uploaded or stored. After a
-  Convert pass the marked-up text can be **downloaded** as
-  `<name>-markers.txt` (`downloadTextFile`, an on-device Blob download) as
-  well as copied. Unknown plain-text citations (no library match) get a
-  **Look up on Zotero** button: it quick-searches the library online
-  (`lookupOnlineSources` → `zotero.searchItems`, `qmode=titleCreatorYear`,
-  personal + groups) and shows each found candidate beside its unknown
-  citation, to add one-by-one or in bulk (`addFoundSources` caches the item
-  locally + adds it to the bibliography, so re-running Convert markers it).
+  disabled until a document is. Nothing is uploaded or stored. The
+  download/copy actions are shown after **every** non-empty Convert pass
+  (not only when something was rewritten), so the download is never
+  missing; saving goes through `clipboard.saveTextFile`, which prefers the
+  Web Share sheet (reliable inside the installed Android PWA — a plain
+  `<a download>` blob often does nothing there) and falls back to the
+  anchor `downloadTextFile` on desktop. Unknown plain-text citations get a
+  **Look up online** button that runs two passes per citation: first the
+  user's own library (`lookupOnlineSources` → `zotero.searchItems`,
+  `qmode=titleCreatorYear`, personal + groups) — those hits are addable as
+  markers (`addFoundSources` caches + bibliographies them); then, only when
+  the library has no hit, a **Crossref** fallback (`lookupCrossrefSources`
+  → `lib/crossref.searchCrossref`, `api.crossref.org`, no key) that is
+  *identify-only* (a Crossref work has no Zotero item key, so it can't
+  become a marker) — it shows the reference + DOI so the user can add it to
+  Zotero and re-sync.
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain
@@ -74,8 +81,10 @@ per the owner's instruction on 2026-07-17.
   extension-less files from Android content providers still import, and
   `ACCEPTED_DOC_TYPES` lists MIME types alongside extensions so Android's
   file chooser doesn't grey out valid documents),
-  `bibliography.ts`, `search.ts`, `zotero.ts`, `db.ts`, `creators.ts`,
-  `clipboard.ts`. Pure logic is unit-tested (`tests/`, vitest).
+  `crossref.ts` (Crossref DOI-registry search for the document scanner's
+  identify-only fallback), `bibliography.ts`, `search.ts`, `zotero.ts`,
+  `db.ts`, `creators.ts`, `clipboard.ts` (copy + `saveTextFile`/
+  `downloadTextFile`). Pure logic is unit-tested (`tests/`, vitest).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub
   Action above. Project ID is pinned in the workflow file.
 - No backend, no build-time secrets beyond `SOTA_API_KEY` (GitHub Actions

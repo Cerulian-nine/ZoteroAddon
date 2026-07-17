@@ -2,6 +2,7 @@ import type { CachedItem, LibraryRef, Settings } from './lib/types';
 import { buildIndex, type IndexedEntry } from './lib/search';
 import * as db from './lib/db';
 import { syncLibrary, listGroups, searchItems, type SyncProgress } from './lib/zotero';
+import { searchCrossref, type CrossrefWork } from './lib/crossref';
 
 /**
  * Central app state. Deliberately simple: one mutable store, screens
@@ -152,6 +153,18 @@ export async function lookupOnlineSources(query: string): Promise<CachedItem[]> 
     }
   }
   return out;
+}
+
+/**
+ * Fall back to Crossref for a citation that isn't in the Zotero library at all.
+ * Read-only identification: Crossref works have no Zotero item key, so they
+ * can't be added as markers here — the UI shows the match and its DOI so the
+ * writer can add it to Zotero and re-sync. Only the "Surname Year" string is
+ * sent to Crossref, never the API key or the document. Returns [] offline.
+ */
+export async function lookupCrossrefSources(query: string): Promise<CrossrefWork[]> {
+  if (!state.online || !query.trim()) return [];
+  return searchCrossref(query);
 }
 
 /**
