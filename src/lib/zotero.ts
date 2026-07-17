@@ -237,11 +237,14 @@ export class ZoteroApiError extends Error {
 export interface KeyInfo {
   userID: number;
   username: string;
+  /** Whether the key may write to the personal library (`access.user.write`). */
+  write: boolean;
 }
 
 /**
  * Validate an API key via GET /keys/current (returns the key's owner and
- * privileges). Also used during onboarding to confirm the user ID.
+ * privileges). Also used during onboarding to confirm the user ID and to learn
+ * whether the key can write (which enables one-tap "Add to Zotero").
  */
 export async function validateKey(apiKey: string, fetchFn: FetchLike = (u, i) => fetch(u, i)): Promise<KeyInfo> {
   let res: Response;
@@ -254,8 +257,72 @@ export async function validateKey(apiKey: string, fetchFn: FetchLike = (u, i) =>
     throw new ZoteroApiError('forbidden', 'Zotero did not accept this API key. Check it and try again.');
   }
   if (!res.ok) throw new ZoteroApiError('http', `Zotero API returned ${res.status}.`, res.status);
-  const info = (await res.json()) as { userID: number; username?: string };
-  return { userID: info.userID, username: info.username ?? '' };
+  const info = (await res.json()) as {
+    userID: number;
+    username?: string;
+    access?: { user?: { write?: boolean } };
+  };
+  return { userID: info.userID, username: info.username ?? '', write: !!info.access?.user?.write };
+}
+
+/* ------------------------------------------------------------------ */
+/* Item creation (write)                                               */
+/* ------------------------------------------------------------------ */
+
+/** A Zotero item payload for creation — `itemType` plus its fields/creators. */
+export type NewItem = Record<string, unknown> & { itemType: string };
+
+/**
+ * Create items in a library via `POST /items` and return the parsed, cached
+ * shape for the ones Zotero accepted (with their new item keys). This is the
+ * only write the app makes, and only ever on an explicit user action: it needs
+ * a key with write access (a read-only key gets a clear 403 message).
+ * Docs: https://www.zotero.org/support/dev/web_api/v3/write_requests
+ */
+export async function createItems(
+  apiKey: string,
+  library: LibraryRef,
+  items: NewItem[],
+  fetchFn: FetchLike = (u, i) => fetch(u, i),
+): Promise<CachedItem[]> {
+  if (items.length === 0) return [];
+  const prefix = libraryPrefix(library);
+  let res: Response;
+  try {
+    res = await fetchFn(`${API_BASE}${prefix}/items`, {
+      method: 'POST',
+      headers: {
+        'Zotero-API-Version': '3',
+        'Zotero-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(items),
+    });
+  } catch {
+    throw new ZoteroApiError('network', 'Could not reach api.zotero.org. Check your connection and try again.');
+  }
+  if (res.status === 403) {
+    throw new ZoteroApiError(
+      'forbidden',
+      'This API key can’t write to your Zotero library. Create a key with “Allow write access” ticked at zotero.org/settings/keys, then save it in Settings.',
+    );
+  }
+  if (!res.ok) throw new ZoteroApiError('http', `Zotero API returned ${res.status}.`, res.status);
+
+  const body = (await res.json()) as {
+    successful?: Record<string, ApiItem>;
+    failed?: Record<string, { code: number; message: string }>;
+  };
+  const created: CachedItem[] = [];
+  for (const raw of Object.values(body.successful ?? {})) {
+    const parsed = parseApiItem(raw, library);
+    if (parsed) created.push(parsed);
+  }
+  if (created.length === 0) {
+    const failure = Object.values(body.failed ?? {})[0];
+    throw new ZoteroApiError('http', failure ? `Zotero rejected the item: ${failure.message}` : 'Zotero didn’t create the item.');
+  }
+  return created;
 }
 
 /**

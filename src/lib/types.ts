@@ -44,6 +44,9 @@ export interface Settings {
   onboarded: boolean;
   /** CSL style short-name (e.g. "apa") used to render the bibliography. */
   bibliographyStyle: string;
+  /** Whether the saved API key can write to the personal library (from
+   *  `/keys/current`). Enables one-tap "Add to Zotero" for Crossref finds. */
+  writeAccess: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncGroups: false,
   onboarded: false,
   bibliographyStyle: 'apa',
+  writeAccess: false,
 };
 
 export function itemId(library: LibraryRef, itemKey: string): string {

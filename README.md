@@ -72,7 +72,12 @@ Conversion is **best-effort and safe**: a citation is only rewritten when it map
 
 After a conversion, the marked-up draft can be **downloaded** (as `<name>-markers.txt`) or copied straight back — on Android the download uses the system share sheet, so it saves reliably from inside the installed app. The download/copy are always offered once a conversion has run, even when nothing needed rewriting.
 
-Unknown citations get a **Look up online** step. It first searches your own Zotero library (in case the source is there but not yet synced to this device — those matches can be added straight into your library and bibliography). If a citation isn't in your Zotero at all, it falls back to **Crossref**, the registry behind DOIs, to identify the work and show its DOI so you can add it to Zotero yourself (via Zotero's "Add Item by Identifier") and re-sync. Crossref matches are identify-only — they have no Zotero key, so they can't be turned into markers here directly.
+Unknown citations get a **Look up online** step. It first searches your own Zotero library (in case the source is there but not yet synced to this device — those matches can be added straight into your library and bibliography). If a citation isn't in your Zotero at all, it falls back to **Crossref**, the registry behind DOIs, to identify the work.
+
+What you can do with a Crossref match depends on your API key:
+
+- **Write-enabled key** — tap **Add to Zotero** and CitePocket creates the item in your personal library (mapping the Crossref metadata to the right Zotero item type), caches it, and adds it to your bibliography. Re-run Convert and it becomes a marker like any other source. This is the only write the app makes, and only on that explicit tap.
+- **Read-only key** — the match is identify-only: it shows the reference and DOI so you can add it in Zotero yourself (via "Add Item by Identifier"), then re-sync. Enable write access on your key in Settings to switch to one-tap adding.
 
 ## Setup
 
@@ -86,7 +91,7 @@ npm run preview    # serve the production build locally
 
 First run in the app itself:
 
-1. Create a **read-only** API key at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) (your numeric userID is shown on the same page — CitePocket can also read it from the key automatically).
+1. Create an API key at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) — **read-only** is all you need to cite (your numeric userID is shown on the same page — CitePocket can also read it from the key automatically). Tick **"Allow write access"** if you want the one-tap "Add to Zotero" for sources found on Crossref.
 2. Paste the key into onboarding. It's validated against `GET /keys/current` before you can continue.
 3. Pick a copy format, try the test marker, and let the library sync.
 
@@ -143,7 +148,7 @@ The app is four screens with no shared component tree, no complex reconciliation
 - Your API key is stored **only** in IndexedDB on the device and sent **only** to `api.zotero.org` — including the bibliography-rendering requests. It is never sent anywhere else.
 - On boot, CitePocket requests [persistent storage](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) (`navigator.storage.persist()`) so Chrome won't silently evict that IndexedDB data under storage pressure or after a period of inactivity — the most common cause of "my API key disappeared" on Android.
 - No analytics, no tracking. The only non-Zotero request is the document scanner's optional **Crossref** fallback (`api.crossref.org`), and only when you tap "Look up online": it sends just the citation's author-and-year text — never your API key, and never the document.
-- The UI recommends read-only keys; the app never issues a write request (Crossref is queried read-only too).
+- The UI defaults to read-only keys. The app makes exactly one kind of write — creating an item in your Zotero library — and only when you tap **"Add to Zotero"** on a Crossref match with a write-enabled key. It never edits or deletes anything.
 - "Reset all local data" in Settings wipes the cache, recents, and key.
 
 ## Accessibility

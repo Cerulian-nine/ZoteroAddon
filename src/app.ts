@@ -1,8 +1,8 @@
 import type { CachedItem, LibraryRef, Settings } from './lib/types';
 import { buildIndex, type IndexedEntry } from './lib/search';
 import * as db from './lib/db';
-import { syncLibrary, listGroups, searchItems, type SyncProgress } from './lib/zotero';
-import { searchCrossref, type CrossrefWork } from './lib/crossref';
+import { syncLibrary, listGroups, searchItems, createItems, ZoteroApiError, type SyncProgress } from './lib/zotero';
+import { searchCrossref, crossrefToZoteroItem, type CrossrefWork } from './lib/crossref';
 
 /**
  * Central app state. Deliberately simple: one mutable store, screens
@@ -165,6 +165,26 @@ export async function lookupOnlineSources(query: string): Promise<CachedItem[]> 
 export async function lookupCrossrefSources(query: string): Promise<CrossrefWork[]> {
   if (!state.online || !query.trim()) return [];
   return searchCrossref(query);
+}
+
+/**
+ * Create a Zotero item from a Crossref work in the user's personal library,
+ * then cache it and add it to the bibliography — so it resolves like any synced
+ * source and a re-run Convert turns it into a marker. Needs a write-enabled key
+ * (a read-only key throws a clear ZoteroApiError, surfaced by the caller).
+ * Returns the newly-created cached item.
+ */
+export async function addCrossrefToZotero(w: CrossrefWork): Promise<CachedItem> {
+  const { apiKey, userId } = state.settings;
+  if (!apiKey || !userId) throw new ZoteroApiError('forbidden', 'Connect Zotero in Settings first.');
+  const library: LibraryRef = { type: 'user', id: userId };
+  const [created] = await createItems(apiKey, library, [crossrefToZoteroItem(w)]);
+  await db.idbItemStore.putItems([created]);
+  await db.addToBibliography(created.id);
+  await refreshItemsFromDb();
+  state.bibliography = await db.getBibliographyItems();
+  notify();
+  return created;
 }
 
 /**

@@ -11,6 +11,7 @@ import { h, toast, markerChip, showClipboardFallback } from './dom';
 let step = 1;
 let draftKey = '';
 let draftUserId = '';
+let draftWrite = false;
 let draftFormat: OutputFormat = 'odf-scan';
 let busy = false;
 let error = '';
@@ -54,6 +55,7 @@ function stepConnect(): HTMLElement {
         (continueBtn as HTMLButtonElement).disabled = true;
         try {
           const info = await validateKey(draftKey);
+          draftWrite = info.write;
           // Trust Zotero's answer for the user ID; fill it in if left blank.
           if (!draftUserId) draftUserId = String(info.userID);
           else if (String(info.userID) !== draftUserId) {
@@ -79,7 +81,8 @@ function stepConnect(): HTMLElement {
     h('h1', {}, 'Connect Zotero'),
     h('p', {}, 'CitePocket reads your library straight from Zotero. Create a key at ',
       h('a', { href: 'https://www.zotero.org/settings/keys', target: '_blank', rel: 'noopener' }, 'zotero.org/settings/keys'),
-      ' — ', h('strong', {}, 'read-only is all it needs'), ', so leave the write permissions unchecked.'),
+      ' — ', h('strong', {}, 'read-only is all it needs to cite'), '. Tick ', h('strong', {}, '“Allow write access”'),
+      ' too if you’d like CitePocket to add sources it finds online (via Crossref) straight into your Zotero library.'),
     h('div', { class: 'field' }, h('label', {}, 'API key'), keyInput,
       h('p', { class: 'hint' }, 'Stored only on this device. Sent only to api.zotero.org.')),
     h('div', { class: 'field' }, h('label', {}, 'User ID (optional)'), idInput,
@@ -171,6 +174,7 @@ function stepRoundtrip(): HTMLElement {
             apiKey: draftKey,
             userId: Number(draftUserId),
             format: draftFormat,
+            writeAccess: draftWrite,
             onboarded: true,
           });
           draftKey = '';

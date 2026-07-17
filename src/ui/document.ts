@@ -6,6 +6,7 @@ import {
   lookupOnlineSources,
   lookupCrossrefSources,
   addFoundSources,
+  addCrossrefToZotero,
 } from '../app';
 import type { CachedItem } from '../lib/types';
 import type { CrossrefWork } from '../lib/crossref';
@@ -54,6 +55,8 @@ let lookupLoading = false;
 let lookupError: string | null = null;
 /** Ids of found sources the user has already added (across re-renders). */
 const addedFound = new Set<string>();
+/** DOIs (or titles) of Crossref works already added to Zotero this session. */
+const addedCrossref = new Set<string>();
 
 function resetResults(): void {
   report = null;
@@ -67,6 +70,7 @@ function resetLookup(): void {
   lookupLoading = false;
   lookupError = null;
   addedFound.clear();
+  addedCrossref.clear();
 }
 
 function itemLine(item: CachedItem, extra?: string): HTMLElement {
@@ -278,11 +282,16 @@ function foundRow(item: CachedItem): HTMLElement {
     action);
 }
 
+/** Stable key for a Crossref work, for tracking what's been added. */
+function crossrefKey(work: CrossrefWork): string {
+  return work.doi || work.title;
+}
+
 /**
- * A Crossref candidate row: identify-only. A Crossref work has no Zotero item
- * key, so it can't be added as a marker here — we show the reference and its
- * DOI so the writer can add it to Zotero (its "Add Item by Identifier" takes a
- * DOI) and re-sync.
+ * A Crossref candidate row. With a write-enabled key it carries an
+ * "Add to Zotero" button (`addCrossrefToZotero` creates the item, so a re-run
+ * Convert markers it); with a read-only key it's identify-only — the DOI is
+ * shown so the writer can add it in Zotero themselves.
  */
 function crossrefRow(work: CrossrefWork): HTMLElement {
   const who = work.authors || work.title;
@@ -296,11 +305,38 @@ function crossrefRow(work: CrossrefWork): HTMLElement {
       ? h('a', { class: 'lookup-doi', href: work.url, target: '_blank', rel: 'noopener noreferrer' }, work.doi)
       : document.createTextNode(work.doi));
   }
-  return h('li', { class: 'doc-item lookup-crossref-item' },
+
+  const body = h('div', { class: 'lookup-found-body' },
     h('span', { class: 'row-who' }, who, ' ', h('span', { class: 'year' }, `(${work.year ?? 'n.d.'})`)),
     h('span', { class: 'row-title' }, work.title),
     meta.childNodes.length > 0 ? meta : null,
   );
+
+  let action: HTMLElement | null = null;
+  if (state.settings.writeAccess) {
+    action = addedCrossref.has(crossrefKey(work))
+      ? h('span', { class: 'lookup-added' }, '✓ Added')
+      : h('button', {
+          class: 'btn small',
+          onclick: async (e: Event) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            btn.disabled = true;
+            btn.textContent = 'Adding…';
+            const key = crossrefKey(work);
+            addedCrossref.add(key); // mark before addCrossrefToZotero re-renders
+            try {
+              await addCrossrefToZotero(work); // caches + bibliographies; triggers re-render
+              toast(`Added ${who} to Zotero`);
+            } catch (err) {
+              addedCrossref.delete(key); // roll back so the button comes back
+              toast(err instanceof ZoteroApiError ? err.message : 'Couldn’t add to Zotero.', 4200);
+              notify();
+            }
+          },
+        }, 'Add to Zotero');
+  }
+
+  return h('li', { class: 'doc-item lookup-found-item lookup-crossref-item' }, body, action);
 }
 
 /** One unknown citation paired with whatever was found for it. */
@@ -312,9 +348,11 @@ function lookupPair(l: Lookup): HTMLElement {
     body = h('ul', { class: 'results doc-list lookup-found-list' }, ...l.found.map(foundRow));
   } else if (l.crossref.length > 0) {
     label = 'Found on Crossref';
+    const note = state.settings.writeAccess
+      ? 'Not in your Zotero library yet — tap “Add to Zotero” to save it, then re-run Convert to turn it into a marker.'
+      : 'Not in your Zotero library. Add it to Zotero (its “Add Item by Identifier” takes a DOI), then re-sync here and re-run Convert. (Enable write access on your key in Settings to add these in one tap.)';
     body = h('div', { class: 'lookup-crossref' },
-      h('p', { class: 'lookup-crossref-note' },
-        'Not in your Zotero library. Add it to Zotero (its “Add Item by Identifier” takes a DOI), then re-sync here and re-run Convert to turn it into a marker.'),
+      h('p', { class: 'lookup-crossref-note' }, note),
       h('ul', { class: 'results doc-list lookup-crossref-list' }, ...l.crossref.map(crossrefRow)));
   } else {
     label = 'Not found';
