@@ -497,6 +497,46 @@ a { color: var(--accent); }
   justify-content: center;
   gap: 8px;
 }
+.doc-loaded {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--ink);
+}
+.doc-loaded > svg { color: var(--accent); flex: none; }
+.doc-loaded-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.doc-loaded-name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-loaded-meta { font-size: 12.5px; color: var(--ink-soft); }
+.doc-loaded-clear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.doc-loaded-clear:hover { background: var(--marker-bg); color: var(--ink); }
 .doc-file-error {
   margin: 10px 0 0;
   padding: 10px 12px;

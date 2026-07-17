@@ -27,6 +27,8 @@ let docText = '';
 let report: ScanReport | null = null;
 let conversion: ConversionResult | null = null;
 let fileError: string | null = null;
+/** Set when the current draft came from an uploaded file, so we can show it. */
+let loadedDoc: { name: string; chars: number } | null = null;
 
 function reset(): void {
   report = null;
@@ -169,6 +171,9 @@ export function renderDocument(root: HTMLElement): void {
   const prev = root.querySelector<HTMLTextAreaElement>('.doc-input');
   if (prev) docText = prev.value;
 
+  // An emptied box is no longer "the uploaded document" — drop the banner.
+  if (!docText.trim()) loadedDoc = null;
+
   root.replaceChildren();
 
   const textarea = h('textarea', {
@@ -201,15 +206,22 @@ export function renderDocument(root: HTMLElement): void {
         const doc = await readDocumentFile(file);
         if (!doc.text.trim()) {
           fileError = `“${doc.name}” looks empty — no text to scan.`;
+          loadedDoc = null;
         } else {
           docText = doc.text;
+          // Keep the live DOM textarea in sync: the re-render below reads the
+          // existing .doc-input value back into docText, so without this the
+          // freshly loaded text would be clobbered by the stale (empty) box.
+          textarea.value = doc.text;
           reset();
+          loadedDoc = { name: doc.name, chars: doc.text.length };
           toast(`Loaded ${doc.name}`);
         }
       } catch (err) {
         fileError = err instanceof DocImportError
           ? err.message
           : 'Couldn’t read that file — try another format, or paste the text.';
+        loadedDoc = null;
       }
       notify(); // re-render: shows the loaded text (or the error) and clears stale results
     },
@@ -251,6 +263,29 @@ export function renderDocument(root: HTMLElement): void {
     },
   }, 'Convert citations to markers');
 
+  // Visible confirmation that a document is loaded and ready to evaluate,
+  // with a way to clear it and start over.
+  const loadedBanner = loadedDoc && docText.trim()
+    ? h('div', { class: 'doc-loaded', role: 'status' },
+        svgIcon(ICONS.file, 20),
+        h('span', { class: 'doc-loaded-info' },
+          h('strong', { class: 'doc-loaded-name' }, loadedDoc.name),
+          h('span', { class: 'doc-loaded-meta' },
+            `${loadedDoc.chars.toLocaleString()} character${loadedDoc.chars === 1 ? '' : 's'} loaded — ready to scan or convert`)),
+        h('button', {
+          class: 'doc-loaded-clear',
+          type: 'button',
+          'aria-label': 'Remove uploaded document',
+          onclick: () => {
+            docText = '';
+            textarea.value = ''; // clear the live DOM too, or the re-render reads it back
+            loadedDoc = null;
+            reset();
+            notify();
+          },
+        }, svgIcon(ICONS.x, 16)))
+    : null;
+
   const results = h('div', { class: 'doc-results' });
   if (report) renderReport(results, report);
   else if (conversion) renderConversion(results, conversion);
@@ -268,6 +303,7 @@ export function renderDocument(root: HTMLElement): void {
       ' turns plain-text citations like (Meier, 2021) into markers so the desktop ODF-Scan pass and the reference list pick them up.'),
     h('div', { class: 'doc-upload' }, uploadBtn, fileInput),
     fileError ? h('p', { class: 'doc-file-error', role: 'alert' }, fileError) : null,
+    loadedBanner,
     textarea,
     h('div', { class: 'doc-actions' }, scanBtn, convertBtn),
     results,

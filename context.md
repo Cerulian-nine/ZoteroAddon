@@ -55,7 +55,10 @@ per the owner's instruction on 2026-07-17.
   The document screen takes a draft two ways: paste into the textarea, or
   **Upload document** (.docx / .odt / .txt/.md) — the file is parsed
   in-browser and its text fills the same textarea; nothing is uploaded or
-  stored.
+  stored. An uploaded file shows a "loaded" banner (name + character count,
+  with a clear button) so it's visible a document is ready to evaluate.
+  Note: upload/clear must also write the live `.doc-input` DOM value, since
+  the next re-render reads that box back into `docText`.
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain
