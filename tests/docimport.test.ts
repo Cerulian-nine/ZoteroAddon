@@ -1,9 +1,27 @@
 import { describe, it, expect } from 'vitest';
+import { zipSync, strToU8 } from 'fflate';
 import {
   decodeXmlEntities,
   extractDocxText,
   extractOdtText,
+  readDocumentFile,
+  DocImportError,
+  ACCEPTED_DOC_TYPES,
 } from '../src/lib/docimport';
+
+/** Copy bytes into a fresh ArrayBuffer-backed view the File/Blob types accept. */
+function part(bytes: Uint8Array): BlobPart {
+  return bytes.slice().buffer;
+}
+
+/** A minimal but valid .docx byte payload wrapping the given body text. */
+function docxBytes(text: string): BlobPart {
+  const xml =
+    '<w:document xmlns:w="x"><w:body><w:p><w:r><w:t>' +
+    text +
+    '</w:t></w:r></w:p></w:body></w:document>';
+  return part(zipSync({ 'word/document.xml': strToU8(xml) }));
+}
 
 describe('decodeXmlEntities', () => {
   it('decodes the five predefined entities', () => {
@@ -93,5 +111,65 @@ describe('extractOdtText', () => {
     const xml =
       '<office:body><office:text><text:p>Meier &amp; Kraus &#8212; 2021</text:p></office:text></office:body>';
     expect(extractOdtText(xml)).toBe('Meier & Kraus — 2021');
+  });
+});
+
+describe('readDocumentFile', () => {
+  it('reads a .docx by its extension', async () => {
+    const file = new File([docxBytes('Meier (2021)')], 'draft.docx');
+    const res = await readDocumentFile(file);
+    expect(res).toEqual({ text: 'Meier (2021)', format: 'docx', name: 'draft.docx' });
+  });
+
+  it('reads a plain-text file by its extension', async () => {
+    const file = new File(['Plain notes (Kraus, 2019).'], 'notes.txt');
+    const res = await readDocumentFile(file);
+    expect(res).toEqual({ text: 'Plain notes (Kraus, 2019).', format: 'txt', name: 'notes.txt' });
+  });
+
+  it('falls back to the MIME type when the name has no extension', async () => {
+    // Android content providers often hand over an extension-less display name.
+    const file = new File([docxBytes('From Drive')], 'Document', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const res = await readDocumentFile(file);
+    expect(res.format).toBe('docx');
+    expect(res.text).toBe('From Drive');
+  });
+
+  it('reads extension-less text/plain via the MIME fallback', async () => {
+    const file = new File(['just text'], 'clipboard', { type: 'text/plain' });
+    const res = await readDocumentFile(file);
+    expect(res).toEqual({ text: 'just text', format: 'txt', name: 'clipboard' });
+  });
+
+  it('prefers the extension over the MIME type when both are present', async () => {
+    // A .docx mislabelled as text/plain must still be unzipped, not read raw.
+    const file = new File([docxBytes('Real docx')], 'draft.docx', { type: 'text/plain' });
+    const res = await readDocumentFile(file);
+    expect(res.format).toBe('docx');
+    expect(res.text).toBe('Real docx');
+  });
+
+  it('rejects legacy .doc with a save-as-.docx message', async () => {
+    const file = new File(['binary'], 'old.doc');
+    await expect(readDocumentFile(file)).rejects.toBeInstanceOf(DocImportError);
+    await expect(readDocumentFile(file)).rejects.toThrow(/\.docx/);
+  });
+
+  it('rejects a truly unsupported file', async () => {
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
+    await expect(readDocumentFile(file)).rejects.toBeInstanceOf(DocImportError);
+  });
+});
+
+describe('ACCEPTED_DOC_TYPES', () => {
+  it('lists MIME types alongside extensions so Android pickers do not grey out files', () => {
+    expect(ACCEPTED_DOC_TYPES).toContain('.docx');
+    expect(ACCEPTED_DOC_TYPES).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(ACCEPTED_DOC_TYPES).toContain('application/vnd.oasis.opendocument.text');
+    expect(ACCEPTED_DOC_TYPES).toContain('text/plain');
   });
 });
