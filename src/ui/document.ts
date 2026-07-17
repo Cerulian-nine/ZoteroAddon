@@ -1,12 +1,14 @@
-import { state, navigate, notify, addManyToBibliographyList } from '../app';
+import { state, navigate, notify, addManyToBibliographyList, lookupOnlineSources, addFoundSources } from '../app';
 import type { CachedItem } from '../lib/types';
 import {
   scanDocument,
   convertCitations,
   type ScanReport,
   type ConversionResult,
+  type UnmatchedCitation,
 } from '../lib/scan';
-import { copyText, vibrate } from '../lib/clipboard';
+import { ZoteroApiError } from '../lib/zotero';
+import { copyText, downloadTextFile, vibrate } from '../lib/clipboard';
 import { readDocumentFile, DocImportError, ACCEPTED_DOC_TYPES } from '../lib/docimport';
 import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
 
@@ -30,10 +32,29 @@ let report: ScanReport | null = null;
 let conversion: ConversionResult | null = null;
 let fileError: string | null = null;
 
+/** Online-lookup state for the unknown citations left by a conversion. */
+interface Lookup {
+  citation: UnmatchedCitation;
+  found: CachedItem[];
+}
+let lookups: Lookup[] | null = null;
+let lookupLoading = false;
+let lookupError: string | null = null;
+/** Ids of found sources the user has already added (across re-renders). */
+const addedFound = new Set<string>();
+
 function resetResults(): void {
   report = null;
   conversion = null;
   fileError = null;
+  resetLookup();
+}
+
+function resetLookup(): void {
+  lookups = null;
+  lookupLoading = false;
+  lookupError = null;
+  addedFound.clear();
 }
 
 function itemLine(item: CachedItem, extra?: string): HTMLElement {
@@ -121,23 +142,33 @@ function renderConversion(host: HTMLElement, c: ConversionResult): void {
   }
 
   if (subs > 0) {
-    /* the converted document, ready to copy back */
+    /* the converted document, ready to copy back or download */
     const out = h('textarea', {
       class: 'doc-output', rows: '8', readonly: true, 'aria-label': 'Converted document text',
     }) as HTMLTextAreaElement;
     out.value = c.text;
     out.addEventListener('focus', () => out.select());
     host.append(
-      h('p', { class: 'doc-ok' }, `✓ Copy the converted text below and paste it back over your draft, then run the ODF-Scan desktop step.`),
+      h('p', { class: 'doc-ok' }, `✓ Download or copy the converted document below and put it back in place of your draft, then run the ODF-Scan desktop step.`),
       out,
-      h('button', {
-        class: 'btn block',
-        onclick: async () => {
-          const ok = await copyText(c.text);
-          if (ok) { vibrate(); toast('Converted document copied'); }
-          else showClipboardFallback(c.text);
-        },
-      }, 'Copy converted document'),
+      h('div', { class: 'doc-actions' },
+        h('button', {
+          class: 'btn block',
+          onclick: () => {
+            downloadTextFile(convertedFilename(), c.text);
+            vibrate();
+            toast('Converted document downloaded');
+          },
+        }, svgIcon(ICONS.download, 18), 'Download converted document'),
+        h('button', {
+          class: 'btn secondary block',
+          onclick: async () => {
+            const ok = await copyText(c.text);
+            if (ok) { vibrate(); toast('Converted document copied'); }
+            else showClipboardFallback(c.text);
+          },
+        }, 'Copy converted document'),
+      ),
     );
   }
 
@@ -154,6 +185,138 @@ function renderConversion(host: HTMLElement, c: ConversionResult): void {
               : 'no matching source in your library'))),
       ),
     );
+
+    renderLookupSection(host, c);
+  }
+}
+
+/** Filename for the converted document: the original name, "-markers.txt". */
+function convertedFilename(): string {
+  const base = (doc?.name ?? 'document').replace(/\.[^.]+$/, '');
+  return `${base}-markers.txt`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Online lookup — find unknown sources on Zotero and add them         */
+/* ------------------------------------------------------------------ */
+
+/** The unmatched citations worth searching Zotero for (missing, not ambiguous). */
+function lookupTargets(c: ConversionResult): UnmatchedCitation[] {
+  return c.unmatched.filter((u) => u.reason === 'no-match' && !!u.query);
+}
+
+async function runLookup(c: ConversionResult): Promise<void> {
+  const targets = lookupTargets(c);
+  if (targets.length === 0 || lookupLoading) return;
+  if (!state.online) {
+    lookupError = 'Looking up sources needs an internet connection — try again once you’re back online.';
+    notify();
+    return;
+  }
+  lookupLoading = true;
+  lookupError = null;
+  notify();
+  try {
+    const results: Lookup[] = [];
+    for (const citation of targets) {
+      results.push({ citation, found: await lookupOnlineSources(citation.query!) });
+    }
+    lookups = results;
+  } catch (err) {
+    lookupError = err instanceof ZoteroApiError
+      ? err.message
+      : 'Couldn’t search Zotero. Check your connection and try again.';
+  } finally {
+    lookupLoading = false;
+    notify();
+  }
+}
+
+/** A found candidate row: the source, plus an Add / Added button. */
+function foundRow(item: CachedItem): HTMLElement {
+  const who = item.creatorsDisplay || item.title;
+  const added = addedFound.has(item.id);
+  const action = added
+    ? h('span', { class: 'lookup-added' }, '✓ Added')
+    : h('button', {
+        class: 'btn small',
+        onclick: async () => {
+          addedFound.add(item.id); // mark before the re-render addFoundSources triggers
+          await addFoundSources([item]);
+          toast(`Added ${who}`);
+        },
+      }, 'Add');
+  return h('li', { class: 'doc-item lookup-found-item' },
+    h('div', { class: 'lookup-found-body' },
+      h('span', { class: 'row-who' }, who, ' ', h('span', { class: 'year' }, `(${item.year ?? 'n.d.'})`)),
+      h('span', { class: 'row-title' }, item.title)),
+    action);
+}
+
+/** One unknown citation paired with the candidates found on Zotero. */
+function lookupPair(l: Lookup): HTMLElement {
+  const foundList = l.found.length > 0
+    ? h('ul', { class: 'results doc-list lookup-found-list' }, ...l.found.map(foundRow))
+    : h('p', { class: 'lookup-none' }, 'No match on Zotero — the source may not be in your library at all.');
+
+  return h('div', { class: 'lookup-pair' },
+    h('div', { class: 'lookup-unknown' },
+      h('span', { class: 'lookup-label' }, 'In your document'),
+      h('span', { class: 'lookup-unknown-text' }, l.citation.original)),
+    h('div', { class: 'lookup-results' },
+      h('span', { class: 'lookup-label' }, l.found.length > 0 ? 'Found on Zotero' : 'Not found'),
+      foundList),
+  );
+}
+
+function renderLookupSection(host: HTMLElement, c: ConversionResult): void {
+  const targets = lookupTargets(c);
+  if (targets.length === 0) return;
+
+  if (lookupError) {
+    host.append(h('p', { class: 'doc-file-error', role: 'alert' }, lookupError));
+  }
+
+  // Not searched yet: offer the lookup button.
+  if (!lookups) {
+    host.append(
+      h('p', { class: 'lookup-intro' },
+        'Some of these sources may be in your Zotero library but not synced to this device yet. Search Zotero online for them, then add the right ones.'),
+      h('button', {
+        class: 'btn secondary block',
+        disabled: lookupLoading || undefined,
+        onclick: () => void runLookup(c),
+      }, lookupLoading
+        ? 'Searching Zotero…'
+        : `Look up ${targets.length} unknown source${targets.length === 1 ? '' : 's'} on Zotero`),
+    );
+    return;
+  }
+
+  // Searched: show the found candidates beside each unknown citation.
+  const addable = new Map<string, CachedItem>();
+  for (const l of lookups) for (const item of l.found) if (!addedFound.has(item.id)) addable.set(item.id, item);
+  const addableItems = [...addable.values()];
+
+  host.append(
+    h('h2', {}, 'Look up on Zotero'),
+    h('p', {}, 'Check each match against the citation in your document, then add the ones that are right — individually, or all at once. Added sources join your library and bibliography, so re-running “Convert” will turn them into markers.'),
+    ...lookups.map(lookupPair),
+  );
+
+  if (addableItems.length > 0) {
+    host.append(
+      h('button', {
+        class: 'btn block',
+        onclick: async () => {
+          for (const item of addableItems) addedFound.add(item.id); // mark before re-render
+          const n = await addFoundSources(addableItems);
+          toast(`Added ${n} source${n === 1 ? '' : 's'}`);
+        },
+      }, `Add all ${addableItems.length} found source${addableItems.length === 1 ? '' : 's'}`),
+    );
+  } else {
+    host.append(h('p', { class: 'doc-ok' }, '✓ Added the sources you picked — re-run “Convert citations” to insert their markers.'));
   }
 }
 
@@ -235,6 +398,7 @@ export function renderDocument(root: HTMLElement): void {
       if (!doc) return;
       conversion = null;
       fileError = null;
+      resetLookup();
       report = rescan();
       notify();
     },
@@ -247,6 +411,7 @@ export function renderDocument(root: HTMLElement): void {
       if (!doc) return;
       report = null;
       fileError = null;
+      resetLookup();
       conversion = convertCitations({
         text: doc.text,
         items: state.items.values(),

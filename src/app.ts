@@ -1,7 +1,7 @@
-import type { CachedItem, Settings } from './lib/types';
+import type { CachedItem, LibraryRef, Settings } from './lib/types';
 import { buildIndex, type IndexedEntry } from './lib/search';
 import * as db from './lib/db';
-import { syncLibrary, listGroups, type SyncProgress } from './lib/zotero';
+import { syncLibrary, listGroups, searchItems, type SyncProgress } from './lib/zotero';
 
 /**
  * Central app state. Deliberately simple: one mutable store, screens
@@ -118,6 +118,55 @@ export async function clearBibliographyList(): Promise<void> {
   await db.clearBibliography();
   state.bibliography = [];
   notify();
+}
+
+/* ---------------- online source lookup (document scan) ---------------- */
+
+/**
+ * Search the online Zotero library for a source the local cache doesn't have
+ * yet — e.g. a citation in a draft that was added to Zotero after the last
+ * sync. Searches the personal library, plus any groups when group-sync is on,
+ * and returns de-duplicated matches. Returns [] (rather than throwing) when
+ * there's nothing to search with; genuine request failures propagate.
+ */
+export async function lookupOnlineSources(query: string): Promise<CachedItem[]> {
+  const { apiKey, userId, syncGroups } = state.settings;
+  if (!apiKey || !userId || !query.trim()) return [];
+
+  const libraries: LibraryRef[] = [{ type: 'user', id: userId }];
+  if (syncGroups) {
+    try {
+      for (const g of await listGroups(apiKey, userId)) libraries.push({ type: 'group', id: g.id });
+    } catch {
+      /* fall back to just the personal library */
+    }
+  }
+
+  const seen = new Set<string>();
+  const out: CachedItem[] = [];
+  for (const library of libraries) {
+    for (const hit of await searchItems(apiKey, library, query)) {
+      if (seen.has(hit.id)) continue;
+      seen.add(hit.id);
+      out.push(hit);
+    }
+  }
+  return out;
+}
+
+/**
+ * Persist sources discovered via online lookup: cache them in the local
+ * library (so future scans/conversions resolve them) and add them to the
+ * bibliography list. Returns how many were stored.
+ */
+export async function addFoundSources(items: CachedItem[]): Promise<number> {
+  if (items.length === 0) return 0;
+  await db.idbItemStore.putItems(items);
+  await Promise.all(items.map((i) => db.addToBibliography(i.id)));
+  await refreshItemsFromDb();
+  state.bibliography = await db.getBibliographyItems();
+  notify();
+  return items.length;
 }
 
 /* ---------------- sync orchestration ---------------- */

@@ -258,6 +258,39 @@ export async function validateKey(apiKey: string, fetchFn: FetchLike = (u, i) =>
   return { userID: info.userID, username: info.username ?? '' };
 }
 
+/**
+ * Quick-search one library online via the Web API. Uses `qmode=titleCreatorYear`
+ * so a "Surname Year" query hits the creator and date fields (not just the
+ * title), which is exactly what an author-year citation gives us. Returns
+ * parsed top-level items; non-2xx statuses raise a ZoteroApiError so the caller
+ * can tell "nothing found" apart from "the request failed".
+ *
+ * This is the online counterpart to the offline `search()` index: it exists to
+ * find a source that the local cache doesn't have yet (added to Zotero since
+ * the last sync), so it can be pulled in and cited.
+ */
+export async function searchItems(
+  apiKey: string,
+  library: LibraryRef,
+  query: string,
+  fetchFn: FetchLike = (u, i) => fetch(u, i),
+  limit = 8,
+): Promise<CachedItem[]> {
+  const prefix = libraryPrefix(library);
+  const params = new URLSearchParams({
+    q: query,
+    qmode: 'titleCreatorYear',
+    itemType: '-attachment',
+    limit: String(limit),
+    sort: 'dateModified',
+  });
+  const res = await apiGet(`${API_BASE}${prefix}/items/top?${params}`, apiKey, fetchFn);
+  if (res.status === 403) throw new ZoteroApiError('forbidden', 'API key is invalid or lacks access to this library.');
+  if (!res.ok) throw new ZoteroApiError('http', `Zotero API returned ${res.status}.`, res.status);
+  const page = (await res.json()) as ApiItem[];
+  return page.map((r) => parseApiItem(r, library)).filter((x): x is CachedItem => x !== null);
+}
+
 export interface GroupInfo {
   id: number;
   name: string;

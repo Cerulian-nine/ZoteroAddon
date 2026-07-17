@@ -185,6 +185,8 @@ export interface UnmatchedCitation {
   reason: 'no-match' | 'ambiguous';
   /** For an ambiguous match, how many library items fit. */
   candidateCount?: number;
+  /** For a no-match, a "Surname Year" string to search Zotero online with. */
+  query?: string;
 }
 
 export interface ConversionResult {
@@ -345,16 +347,24 @@ export function convertCitations({ text, items, format, citekeyPattern }: Conver
     const matchedItems: CachedItem[] = [];
     let reason: UnmatchedCitation['reason'] | null = null;
     let candidateCount: number | undefined;
+    let failed: Entry | null = null;
 
     for (const entry of cand.entries) {
       const bucket = lookup.get(`${foldName(entry.surname)}|${entry.year}`);
-      if (!bucket || bucket.length === 0) { reason = 'no-match'; break; }
-      if (bucket.length > 1) { reason = 'ambiguous'; candidateCount = bucket.length; break; }
+      if (!bucket || bucket.length === 0) { reason = 'no-match'; failed = entry; break; }
+      if (bucket.length > 1) { reason = 'ambiguous'; candidateCount = bucket.length; failed = entry; break; }
       matchedItems.push(bucket[0]);
     }
 
     if (reason) {
-      unmatched.push({ original: cand.raw, reason, ...(candidateCount ? { candidateCount } : {}) });
+      unmatched.push({
+        original: cand.raw,
+        reason,
+        ...(candidateCount ? { candidateCount } : {}),
+        // A no-match is the one worth searching Zotero for; carry the offending
+        // author-year so the UI can look it up online without re-parsing.
+        ...(reason === 'no-match' && failed ? { query: `${failed.surname} ${failed.year}` } : {}),
+      });
       continue; // leave the original text as-is
     }
 

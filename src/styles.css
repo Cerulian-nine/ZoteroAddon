@@ -569,3 +569,62 @@ a { color: var(--accent); }
   gap: 2px;
 }
 .doc-item .row-title { font-size: 13px; color: var(--ink-soft); }
+
+/* ---------- online source lookup (unknown → Zotero) ---------- */
+.lookup-intro {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.lookup-pair {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+@media (max-width: 520px) {
+  .lookup-pair { grid-template-columns: 1fr; gap: 8px; }
+}
+.lookup-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.lookup-unknown-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--ink);
+  word-break: break-word;
+}
+.lookup-found-list { padding: 0; margin: 0; }
+.lookup-found-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.lookup-found-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lookup-none {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+.lookup-added {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+}
+.btn.small {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
