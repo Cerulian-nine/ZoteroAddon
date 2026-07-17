@@ -1,8 +1,20 @@
-import { state, notify, navigate, runSync } from '../app';
+import { state, notify, navigate, runSync, clearCitedList } from '../app';
 import { saveSettings, resetAllData } from '../lib/db';
 import { validateKey, ZoteroApiError } from '../lib/zotero';
 import type { OutputFormat } from '../lib/types';
 import { h, toast, svgIcon, ICONS } from './dom';
+import { copyBibliographyAction } from './copyBib';
+
+/** Citation styles offered for the "Copy bibliography" feature (CSL short-names). */
+const CITATION_STYLES: { id: string; label: string }[] = [
+  { id: 'apa', label: 'APA (7th edition)' },
+  { id: 'modern-language-association', label: 'MLA (9th edition)' },
+  { id: 'chicago-note-bibliography', label: 'Chicago (note, bibliography)' },
+  { id: 'chicago-author-date', label: 'Chicago (author-date)' },
+  { id: 'harvard-cite-them-right', label: 'Harvard (Cite Them Right)' },
+  { id: 'vancouver', label: 'Vancouver' },
+  { id: 'ieee', label: 'IEEE' },
+];
 
 /** Screen 3 — Settings. Deliberately minimal, per the spec. */
 
@@ -74,6 +86,49 @@ export function renderSettings(root: HTMLElement): void {
   }) as HTMLInputElement;
   patternInput.value = s.citekeyPattern;
 
+  /* citation style (for Copy bibliography) */
+  const styleSelect = h('select', {
+    class: 'select', 'aria-label': 'Citation style for the bibliography',
+    onchange: async (e: Event) => {
+      state.settings = await saveSettings({ citationStyle: (e.target as HTMLSelectElement).value });
+      toast('Citation style saved');
+    },
+  }) as HTMLSelectElement;
+  const known = CITATION_STYLES.some((st) => st.id === s.citationStyle);
+  for (const st of CITATION_STYLES) {
+    styleSelect.append(h('option', { value: st.id }, st.label));
+  }
+  // Preserve a style a user may have set that isn't in our shortlist.
+  if (!known && s.citationStyle) {
+    styleSelect.append(h('option', { value: s.citationStyle }, s.citationStyle));
+  }
+  styleSelect.value = s.citationStyle;
+
+  const citedCount = state.cited.length;
+  const copyBibBtn = h(
+    'button',
+    {
+      class: 'btn secondary block',
+      disabled: citedCount === 0 || undefined,
+      onclick: () => void copyBibliographyAction(),
+    },
+    citedCount === 0 ? 'Copy bibliography' : `Copy bibliography (${citedCount} item${citedCount === 1 ? '' : 's'})`,
+  );
+
+  const clearCitedBtn = h(
+    'button',
+    {
+      class: 'btn danger block',
+      disabled: citedCount === 0 || undefined,
+      onclick: async () => {
+        if (!confirm('Clear the current document’s cited items and start fresh?')) return;
+        await clearCitedList();
+        toast('Cited list cleared');
+      },
+    },
+    'Clear cited list',
+  );
+
   /* groups toggle */
   const groupsCheckbox = h('input', {
     type: 'checkbox', id: 'sync-groups',
@@ -115,6 +170,14 @@ export function renderSettings(root: HTMLElement): void {
 
     h('h2', {}, 'Group libraries'),
     h('label', { class: 'check-row', for: 'sync-groups' }, groupsCheckbox, 'Also sync group libraries this key can access'),
+
+    h('h2', {}, 'Bibliography'),
+    h('p', {}, 'Build a finished, styled reference list from the items you’ve cited in the current document — rendered by Zotero, no desktop conversion needed. Needs a connection.'),
+    h('div', { class: 'field' }, h('label', {}, 'Citation style'), styleSelect),
+    copyBibBtn,
+    citedCount === 0
+      ? h('p', { class: 'settings-meta' }, 'No cited items yet — copy a citation to start building one.')
+      : clearCitedBtn,
 
     h('h2', {}, 'Library'),
     h('p', { class: 'settings-meta' }, lastSyncText),

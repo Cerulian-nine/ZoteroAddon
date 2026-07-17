@@ -8,13 +8,14 @@ import type { ItemStore } from './zotero';
  *   items    — the cached library (keyed by composite id)
  *   meta     — settings, per-library sync versions, last-sync info
  *   recents  — recently copied items (small, capped)
+ *   cited    — the current document's cited items (uncapped, running list)
  *
  * The API key never leaves this database except in requests to
  * api.zotero.org.
  */
 
 const DB_NAME = 'citepocket';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const RECENTS_CAP = 15;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
@@ -22,10 +23,17 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
 function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(d) {
-        d.createObjectStore('items', { keyPath: 'id' });
-        d.createObjectStore('meta');
-        d.createObjectStore('recents', { keyPath: 'id' });
+      upgrade(d, oldVersion) {
+        // v1 → initial stores.
+        if (oldVersion < 1) {
+          d.createObjectStore('items', { keyPath: 'id' });
+          d.createObjectStore('meta');
+          d.createObjectStore('recents', { keyPath: 'id' });
+        }
+        // v2 → the running cited-items list for "Copy bibliography".
+        if (oldVersion < 2) {
+          d.createObjectStore('cited', { keyPath: 'id' });
+        }
       },
     });
   }
@@ -124,9 +132,39 @@ export async function touchRecent(itemIdValue: string): Promise<void> {
   }
 }
 
+/* ---------------- cited items (current document) ---------------- */
+
+export interface CitedEntry {
+  id: string; // item id
+  citedAt: number;
+}
+
+/** The running cited-items list, oldest first (document reading order). */
+export async function getCited(): Promise<CitedEntry[]> {
+  const all: CitedEntry[] = await (await db()).getAll('cited');
+  return all.sort((a, b) => a.citedAt - b.citedAt);
+}
+
+/**
+ * Add an item to the current document's cited list. Idempotent: re-citing an
+ * item keeps its original position (first-cited timestamp) so the eventual
+ * bibliography order is stable.
+ */
+export async function addCited(itemIdValue: string): Promise<void> {
+  const d = await db();
+  const existing: CitedEntry | undefined = await d.get('cited', itemIdValue);
+  if (existing) return;
+  await d.put('cited', { id: itemIdValue, citedAt: Date.now() } satisfies CitedEntry);
+}
+
+/** Start a fresh document: drop every tracked cited item. */
+export async function clearCited(): Promise<void> {
+  await (await db()).clear('cited');
+}
+
 /* ---------------- full reset ---------------- */
 
 export async function resetAllData(): Promise<void> {
   const d = await db();
-  await Promise.all([d.clear('items'), d.clear('meta'), d.clear('recents')]);
+  await Promise.all([d.clear('items'), d.clear('meta'), d.clear('recents'), d.clear('cited')]);
 }

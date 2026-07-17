@@ -151,7 +151,7 @@ export function parseApiItem(raw: ApiItem, library: LibraryRef): CachedItem | nu
 /* Sync                                                                */
 /* ------------------------------------------------------------------ */
 
-function libraryPrefix(library: LibraryRef): string {
+export function libraryPrefix(library: LibraryRef): string {
   return library.type === 'user' ? `/users/${library.id}` : `/groups/${library.id}`;
 }
 

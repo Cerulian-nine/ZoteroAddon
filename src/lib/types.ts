@@ -40,6 +40,14 @@ export interface Settings {
   format: OutputFormat;
   /** Better BibTeX-style citekey pattern, e.g. "[auth][year]". */
   citekeyPattern: string;
+  /**
+   * CSL style short-name used by the "Copy bibliography" feature — the
+   * filename (without `.csl`) of a style on the Zotero styles repository,
+   * e.g. "apa", "chicago-note-bibliography", "modern-language-association".
+   * Passed straight to the Web API's `style=` param for server-side CSL
+   * rendering.
+   */
+  citationStyle: string;
   syncGroups: boolean;
   onboarded: boolean;
 }
@@ -49,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userId: 0,
   format: 'odf-scan',
   citekeyPattern: '[auth][year]',
+  citationStyle: 'apa',
   syncGroups: false,
   onboarded: false,
 };

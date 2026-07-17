@@ -4,6 +4,7 @@ import { search } from '../lib/search';
 import { formatMarker, formatMultiMarker } from '../lib/marker';
 import { copyText, vibrate } from '../lib/clipboard';
 import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
+import { copyBibliographyAction } from './copyBib';
 
 /**
  * Screen 1 — the Picker. 95% of usage: open, type, tap, paste.
@@ -282,6 +283,24 @@ export function renderPicker(root: HTMLElement): void {
     }
   }
   renderList();
+
+  /* current-document bibliography — build a finished reference list from the
+     items cited so far. Only shown once something has been cited. */
+  if (state.cited.length > 0) {
+    const n = state.cited.length;
+    root.append(
+      h(
+        'div',
+        { class: 'biblio-bar' },
+        h('span', { class: 'biblio-count' }, `${n} cited in this doc`),
+        h(
+          'button',
+          { class: 'btn secondary', onclick: () => void copyBibliographyAction() },
+          'Copy bibliography',
+        ),
+      ),
+    );
+  }
 
   /* multi-cite tray */
   if (state.tray.length > 0) {

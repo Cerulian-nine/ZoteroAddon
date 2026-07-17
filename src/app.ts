@@ -1,7 +1,8 @@
 import type { CachedItem, Settings } from './lib/types';
 import { buildIndex, type IndexedEntry } from './lib/search';
 import * as db from './lib/db';
-import { syncLibrary, listGroups, type SyncProgress } from './lib/zotero';
+import { syncLibrary, listGroups, ZoteroApiError, type SyncProgress } from './lib/zotero';
+import { fetchBibliography, type Bibliography } from './lib/bibliography';
 
 /**
  * Central app state. Deliberately simple: one mutable store, screens
@@ -16,6 +17,7 @@ export interface AppState {
   items: Map<string, CachedItem>;
   index: IndexedEntry[];
   recents: db.RecentEntry[];
+  cited: db.CitedEntry[]; // the current document's running cited-items list
   tray: string[]; // item ids in the multi-cite tray
   syncing: boolean;
   syncProgress: SyncProgress | null;
@@ -30,6 +32,7 @@ export const state: AppState = {
   items: new Map(),
   index: [],
   recents: [],
+  cited: [],
   tray: [],
   syncing: false,
   syncProgress: null,
@@ -58,16 +61,18 @@ export function navigate(screen: Screen): void {
 /* ---------------- data loading ---------------- */
 
 export async function loadFromCache(): Promise<void> {
-  const [settings, items, recents, lastSync] = await Promise.all([
+  const [settings, items, recents, cited, lastSync] = await Promise.all([
     db.getSettings(),
     db.getAllItems(),
     db.getRecents(),
+    db.getCited(),
     db.getSyncMeta(),
   ]);
   state.settings = settings;
   state.items = new Map(items.map((i) => [i.id, i]));
   state.index = buildIndex(items);
   state.recents = recents;
+  state.cited = cited;
   state.lastSync = lastSync ?? null;
   state.screen = settings.onboarded ? 'picker' : 'onboarding';
 }
@@ -79,8 +84,52 @@ export async function refreshItemsFromDb(): Promise<void> {
 }
 
 export async function markCited(itemIdValue: string): Promise<void> {
-  await db.touchRecent(itemIdValue);
-  state.recents = await db.getRecents();
+  // A copy both bumps the capped "recents" list and appends to the running
+  // cited-items list that feeds "Copy bibliography".
+  await Promise.all([db.touchRecent(itemIdValue), db.addCited(itemIdValue)]);
+  [state.recents, state.cited] = await Promise.all([db.getRecents(), db.getCited()]);
+  notify();
+}
+
+/* ---------------- bibliography ---------------- */
+
+/** Resolve the cited-items list to cached items, in document order. */
+export function citedItems(): CachedItem[] {
+  return state.cited
+    .map((c) => state.items.get(c.id))
+    .filter((i): i is CachedItem => !!i);
+}
+
+/**
+ * Build a finished, styled reference list for the current document's cited
+ * items via the Zotero Web API. This is the one deliberately-online feature;
+ * it fails with a clear message rather than crashing when offline or on error.
+ */
+export async function buildBibliography(): Promise<Bibliography> {
+  const items = citedItems();
+  if (items.length === 0) {
+    throw new Error('No cited items yet — copy a citation first.');
+  }
+  const { apiKey, citationStyle } = state.settings;
+  if (!apiKey) {
+    throw new Error('Add your Zotero API key in Settings to build a bibliography.');
+  }
+  if (!state.online) {
+    throw new Error('You’re offline. Reconnect to build a bibliography.');
+  }
+  try {
+    return await fetchBibliography(items, { apiKey, style: citationStyle });
+  } catch (err) {
+    if (err instanceof ZoteroApiError) throw err;
+    // Network / fetch rejection — surface a friendly, actionable message.
+    throw new Error('Could not reach Zotero. Check your connection and try again.');
+  }
+}
+
+/** Start a fresh document: clear the running cited-items list. */
+export async function clearCitedList(): Promise<void> {
+  await db.clearCited();
+  state.cited = await db.getCited();
   notify();
 }
 
