@@ -1,5 +1,14 @@
-import { state, navigate, notify, addManyToBibliographyList, lookupOnlineSources, addFoundSources } from '../app';
+import {
+  state,
+  navigate,
+  notify,
+  addManyToBibliographyList,
+  lookupOnlineSources,
+  lookupCrossrefSources,
+  addFoundSources,
+} from '../app';
 import type { CachedItem } from '../lib/types';
+import type { CrossrefWork } from '../lib/crossref';
 import {
   scanDocument,
   convertCitations,
@@ -8,7 +17,7 @@ import {
   type UnmatchedCitation,
 } from '../lib/scan';
 import { ZoteroApiError } from '../lib/zotero';
-import { copyText, downloadTextFile, vibrate } from '../lib/clipboard';
+import { copyText, saveTextFile, vibrate } from '../lib/clipboard';
 import { readDocumentFile, DocImportError, ACCEPTED_DOC_TYPES } from '../lib/docimport';
 import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
 
@@ -35,7 +44,10 @@ let fileError: string | null = null;
 /** Online-lookup state for the unknown citations left by a conversion. */
 interface Lookup {
   citation: UnmatchedCitation;
+  /** Matches in the user's own Zotero library (unsynced) — addable as markers. */
   found: CachedItem[];
+  /** Crossref fallback matches when the library has none — identify-only. */
+  crossref: CrossrefWork[];
 }
 let lookups: Lookup[] | null = null;
 let lookupLoading = false;
@@ -134,40 +146,49 @@ function renderConversion(host: HTMLElement, c: ConversionResult): void {
       c.markersPreserved > 0 ? ` · ${c.markersPreserved} existing marker${c.markersPreserved === 1 ? '' : 's'} kept` : ''),
   );
 
-  if (subs === 0 && c.unmatched.length === 0) {
+  if (subs === 0 && c.unmatched.length === 0 && c.markersPreserved === 0) {
     host.append(h('p', { class: 'empty' },
       h('strong', {}, 'No plain-text citations found'),
       ' — this tool looks for author-year citations like (Meier, 2021) or Meier (2021).'));
     return;
   }
 
-  if (subs > 0) {
-    /* the converted document, ready to copy back or download */
+  /*
+   * The document, ready to copy back or download. Shown after every non-empty
+   * Convert pass — not only when something was rewritten — so the download is
+   * never missing: a draft that already holds markers, or one still awaiting a
+   * lookup, can still be handed back. `saveTextFile` prefers the Web Share
+   * sheet so the download works inside the installed Android PWA.
+   */
+  {
     const out = h('textarea', {
-      class: 'doc-output', rows: '8', readonly: true, 'aria-label': 'Converted document text',
+      class: 'doc-output', rows: '8', readonly: true, 'aria-label': 'Document text',
     }) as HTMLTextAreaElement;
     out.value = c.text;
     out.addEventListener('focus', () => out.select());
+    const intro = subs > 0
+      ? '✓ Download or copy the converted document below and put it back in place of your draft, then run the ODF-Scan desktop step.'
+      : 'Nothing needed converting, but you can still download or copy the document below.';
+    const noun = subs > 0 ? 'converted document' : 'document';
     host.append(
-      h('p', { class: 'doc-ok' }, `✓ Download or copy the converted document below and put it back in place of your draft, then run the ODF-Scan desktop step.`),
+      h('p', { class: 'doc-ok' }, intro),
       out,
       h('div', { class: 'doc-actions' },
         h('button', {
           class: 'btn block',
-          onclick: () => {
-            downloadTextFile(convertedFilename(), c.text);
-            vibrate();
-            toast('Converted document downloaded');
+          onclick: async () => {
+            const saved = await saveTextFile(convertedFilename(), c.text);
+            if (saved) { vibrate(); toast('Document saved'); }
           },
-        }, svgIcon(ICONS.download, 18), 'Download converted document'),
+        }, svgIcon(ICONS.download, 18), `Download ${noun}`),
         h('button', {
           class: 'btn secondary block',
           onclick: async () => {
             const ok = await copyText(c.text);
-            if (ok) { vibrate(); toast('Converted document copied'); }
+            if (ok) { vibrate(); toast('Document copied'); }
             else showClipboardFallback(c.text);
           },
-        }, 'Copy converted document'),
+        }, `Copy ${noun}`),
       ),
     );
   }
@@ -219,7 +240,11 @@ async function runLookup(c: ConversionResult): Promise<void> {
   try {
     const results: Lookup[] = [];
     for (const citation of targets) {
-      results.push({ citation, found: await lookupOnlineSources(citation.query!) });
+      const found = await lookupOnlineSources(citation.query!);
+      // Only reach for Crossref when the user's own library turns up nothing —
+      // a library hit is addable as a marker; a Crossref hit is identify-only.
+      const crossref = found.length === 0 ? await lookupCrossrefSources(citation.query!) : [];
+      results.push({ citation, found, crossref });
     }
     lookups = results;
   } catch (err) {
@@ -253,19 +278,56 @@ function foundRow(item: CachedItem): HTMLElement {
     action);
 }
 
-/** One unknown citation paired with the candidates found on Zotero. */
+/**
+ * A Crossref candidate row: identify-only. A Crossref work has no Zotero item
+ * key, so it can't be added as a marker here — we show the reference and its
+ * DOI so the writer can add it to Zotero (its "Add Item by Identifier" takes a
+ * DOI) and re-sync.
+ */
+function crossrefRow(work: CrossrefWork): HTMLElement {
+  const who = work.authors || work.title;
+  // A metadata line: "Journal of Things · <doi link>", each part shown only if
+  // present, joined by a separator when both are.
+  const meta = h('span', { class: 'row-title lookup-crossref-meta' });
+  if (work.containerTitle) meta.append(work.containerTitle);
+  if (work.doi) {
+    if (work.containerTitle) meta.append(' · ');
+    meta.append(work.url
+      ? h('a', { class: 'lookup-doi', href: work.url, target: '_blank', rel: 'noopener noreferrer' }, work.doi)
+      : document.createTextNode(work.doi));
+  }
+  return h('li', { class: 'doc-item lookup-crossref-item' },
+    h('span', { class: 'row-who' }, who, ' ', h('span', { class: 'year' }, `(${work.year ?? 'n.d.'})`)),
+    h('span', { class: 'row-title' }, work.title),
+    meta.childNodes.length > 0 ? meta : null,
+  );
+}
+
+/** One unknown citation paired with whatever was found for it. */
 function lookupPair(l: Lookup): HTMLElement {
-  const foundList = l.found.length > 0
-    ? h('ul', { class: 'results doc-list lookup-found-list' }, ...l.found.map(foundRow))
-    : h('p', { class: 'lookup-none' }, 'No match on Zotero — the source may not be in your library at all.');
+  let label: string;
+  let body: HTMLElement;
+  if (l.found.length > 0) {
+    label = 'Found in your library';
+    body = h('ul', { class: 'results doc-list lookup-found-list' }, ...l.found.map(foundRow));
+  } else if (l.crossref.length > 0) {
+    label = 'Found on Crossref';
+    body = h('div', { class: 'lookup-crossref' },
+      h('p', { class: 'lookup-crossref-note' },
+        'Not in your Zotero library. Add it to Zotero (its “Add Item by Identifier” takes a DOI), then re-sync here and re-run Convert to turn it into a marker.'),
+      h('ul', { class: 'results doc-list lookup-crossref-list' }, ...l.crossref.map(crossrefRow)));
+  } else {
+    label = 'Not found';
+    body = h('p', { class: 'lookup-none' }, 'No match in your library or on Crossref — check the author spelling and year.');
+  }
 
   return h('div', { class: 'lookup-pair' },
     h('div', { class: 'lookup-unknown' },
       h('span', { class: 'lookup-label' }, 'In your document'),
       h('span', { class: 'lookup-unknown-text' }, l.citation.original)),
     h('div', { class: 'lookup-results' },
-      h('span', { class: 'lookup-label' }, l.found.length > 0 ? 'Found on Zotero' : 'Not found'),
-      foundList),
+      h('span', { class: 'lookup-label' }, label),
+      body),
   );
 }
 
@@ -281,14 +343,14 @@ function renderLookupSection(host: HTMLElement, c: ConversionResult): void {
   if (!lookups) {
     host.append(
       h('p', { class: 'lookup-intro' },
-        'Some of these sources may be in your Zotero library but not synced to this device yet. Search Zotero online for them, then add the right ones.'),
+        'Look these up online: first in your own Zotero library (in case they’re there but not synced to this device yet), then on Crossref, the registry behind DOIs, to identify anything you haven’t added to Zotero at all.'),
       h('button', {
         class: 'btn secondary block',
         disabled: lookupLoading || undefined,
         onclick: () => void runLookup(c),
       }, lookupLoading
-        ? 'Searching Zotero…'
-        : `Look up ${targets.length} unknown source${targets.length === 1 ? '' : 's'} on Zotero`),
+        ? 'Searching…'
+        : `Look up ${targets.length} unknown source${targets.length === 1 ? '' : 's'} online`),
     );
     return;
   }
@@ -297,10 +359,13 @@ function renderLookupSection(host: HTMLElement, c: ConversionResult): void {
   const addable = new Map<string, CachedItem>();
   for (const l of lookups) for (const item of l.found) if (!addedFound.has(item.id)) addable.set(item.id, item);
   const addableItems = [...addable.values()];
+  // Whether any library match ever existed (drives the "nothing left to add"
+  // wording — a page of Crossref-only results is not "sources you picked").
+  const hadLibraryMatch = lookups.some((l) => l.found.length > 0);
 
   host.append(
-    h('h2', {}, 'Look up on Zotero'),
-    h('p', {}, 'Check each match against the citation in your document, then add the ones that are right — individually, or all at once. Added sources join your library and bibliography, so re-running “Convert” will turn them into markers.'),
+    h('h2', {}, 'Look up online'),
+    h('p', {}, 'Library matches can be added here — they join your library and bibliography, so re-running “Convert” turns them into markers. Crossref matches aren’t in your Zotero yet: add them to Zotero, then re-sync.'),
     ...lookups.map(lookupPair),
   );
 
@@ -313,9 +378,9 @@ function renderLookupSection(host: HTMLElement, c: ConversionResult): void {
           const n = await addFoundSources(addableItems);
           toast(`Added ${n} source${n === 1 ? '' : 's'}`);
         },
-      }, `Add all ${addableItems.length} found source${addableItems.length === 1 ? '' : 's'}`),
+      }, `Add all ${addableItems.length} library source${addableItems.length === 1 ? '' : 's'}`),
     );
-  } else {
+  } else if (hadLibraryMatch) {
     host.append(h('p', { class: 'doc-ok' }, '✓ Added the sources you picked — re-run “Convert citations” to insert their markers.'));
   }
 }
