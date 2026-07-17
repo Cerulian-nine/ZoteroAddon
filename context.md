@@ -50,12 +50,13 @@ per the owner's instruction on 2026-07-17.
   Web API and copies it as rich text.
 - **Screens** (`src/ui/`, vanilla TS, one mutable store in `src/app.ts`):
   picker, onboarding, settings, bibliography, and **document** (Scan
-  document — reconcile the markers in a pasted-or-uploaded draft against
-  the bibliography list, and convert plain-text citations into markers).
-  The document screen takes a draft two ways: paste into the textarea, or
-  **Upload document** (.docx / .odt / .txt/.md) — the file is parsed
-  in-browser and its text fills the same textarea; nothing is uploaded or
-  stored.
+  document — reconcile the markers in an uploaded draft against the
+  bibliography list, and convert plain-text citations into markers).
+  The document screen is upload-only (no paste textarea): **Upload
+  document** (.docx / .odt / .txt/.md) parses the file in-browser and
+  holds the text in module state; a loaded-document card (file icon,
+  name, word count, remove ×) shows what's loaded, and Scan/Convert stay
+  disabled until a document is. Nothing is uploaded or stored.
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain

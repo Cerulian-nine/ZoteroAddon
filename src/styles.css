@@ -471,26 +471,66 @@ a { color: var(--accent); }
 .add-source input[type="search"]:focus { border-color: var(--accent); outline: none; }
 
 /* ---------------- document scan ---------------- */
-.doc-input, .doc-output {
+.doc-output {
   width: 100%;
   font: inherit;
   color: var(--ink);
-  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 14px;
-  margin: 8px 0 0;
   resize: vertical;
   line-height: 1.45;
-}
-.doc-input:focus { border-color: var(--accent); outline: none; }
-.doc-output {
   background: var(--marker-bg);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-  margin-top: 10px;
+  margin: 10px 0 0;
 }
 .doc-upload { margin: 4px 0 0; }
+.doc-loaded {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--marker-bg);
+  color: var(--ink);
+}
+.doc-loaded > svg { flex-shrink: 0; color: var(--accent); }
+.doc-loaded-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.doc-loaded-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-loaded-meta { font-size: 13px; color: var(--ink-soft); }
+.doc-loaded-remove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.doc-loaded-remove:active { background: var(--line); }
+.doc-empty-hint {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
 .doc-upload .btn {
   display: inline-flex;
   align-items: center;

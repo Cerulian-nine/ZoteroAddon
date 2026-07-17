@@ -11,7 +11,7 @@ import { readDocumentFile, DocImportError, ACCEPTED_DOC_TYPES } from '../lib/doc
 import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
 
 /**
- * Screen 5 — Document tools. Two passes over a pasted draft:
+ * Screen 5 — Document tools. Two passes over an uploaded draft:
  *
  *   • Scan document      — read the markers already in the text and reconcile
  *                          what's *cited* against the saved bibliography list.
@@ -19,16 +19,18 @@ import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
  *                          so the ODF-Scan desktop pass (and the reference
  *                          list) picks them up.
  *
- * Both are pure functions in lib/scan.ts; this file is just the wiring and the
- * result rendering.
+ * The draft comes in via “Upload document” only: the file is parsed in-browser
+ * (lib/docimport) and held in module state until it's replaced or removed —
+ * nothing is uploaded or stored. Both passes are pure functions in lib/scan.ts;
+ * this file is just the wiring and the result rendering.
  */
 
-let docText = '';
+let doc: { text: string; name: string } | null = null;
 let report: ScanReport | null = null;
 let conversion: ConversionResult | null = null;
 let fileError: string | null = null;
 
-function reset(): void {
+function resetResults(): void {
   report = null;
   conversion = null;
   fileError = null;
@@ -55,7 +57,7 @@ function renderReport(host: HTMLElement, r: ScanReport): void {
   if (r.totalMarkers === 0) {
     host.append(h('p', { class: 'empty' },
       h('strong', {}, 'No markers found'),
-      ' — paste a draft that already contains CitePocket markers, or use “Convert citations” below to create them from plain-text citations.'));
+      ' — upload a draft that already contains CitePocket markers, or use “Convert citations” below to create them from plain-text citations.'));
     return;
   }
 
@@ -157,32 +159,22 @@ function renderConversion(host: HTMLElement, c: ConversionResult): void {
 
 function rescan(): ScanReport {
   return scanDocument({
-    text: docText,
+    text: doc?.text ?? '',
     items: state.items,
     bibliographyIds: state.bibliography.map((e) => e.id),
   });
 }
 
-export function renderDocument(root: HTMLElement): void {
-  // Keep whatever is in the textarea across re-renders (results appearing, a
-  // bibliography add, …), the way the picker preserves its search box.
-  const prev = root.querySelector<HTMLTextAreaElement>('.doc-input');
-  if (prev) docText = prev.value;
+function wordCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
 
+export function renderDocument(root: HTMLElement): void {
   root.replaceChildren();
 
-  const textarea = h('textarea', {
-    class: 'doc-input',
-    rows: '7',
-    placeholder: 'Paste your draft here, or use “Upload document” above — either way it’s read locally on this device, never uploaded.',
-    'aria-label': 'Document text to scan',
-    oninput: (e: Event) => { docText = (e.target as HTMLTextAreaElement).value; },
-  }) as HTMLTextAreaElement;
-  textarea.value = docText;
-
-  // Upload a .docx/.odt/.txt file instead of copy-pasting. The file is parsed
-  // in-browser (lib/docimport) and its text drops into the same textarea; the
-  // file itself is never uploaded or stored.
+  // Upload a .docx/.odt/.txt file. The file is parsed in-browser
+  // (lib/docimport) and its text kept in module state; the file itself is
+  // never uploaded or stored.
   let uploadBtn: HTMLButtonElement;
   const fileInput = h('input', {
     type: 'file',
@@ -197,36 +189,50 @@ export function renderDocument(root: HTMLElement): void {
       if (!file) return;
       uploadBtn.setAttribute('disabled', '');
       uploadBtn.textContent = 'Reading…';
+      resetResults();
       try {
-        const doc = await readDocumentFile(file);
-        if (!doc.text.trim()) {
-          fileError = `“${doc.name}” looks empty — no text to scan.`;
+        const imported = await readDocumentFile(file);
+        if (!imported.text.trim()) {
+          fileError = `“${imported.name}” looks empty — no text to scan.`;
         } else {
-          docText = doc.text;
-          reset();
-          toast(`Loaded ${doc.name}`);
+          doc = { text: imported.text, name: imported.name };
+          toast(`Loaded ${imported.name}`);
         }
       } catch (err) {
         fileError = err instanceof DocImportError
           ? err.message
-          : 'Couldn’t read that file — try another format, or paste the text.';
+          : 'Couldn’t read that file — try another format.';
       }
-      notify(); // re-render: shows the loaded text (or the error) and clears stale results
+      notify(); // re-render: shows the loaded-document card (or the error)
     },
   }) as HTMLInputElement;
 
   uploadBtn = h('button', {
     class: 'btn secondary block',
     onclick: () => fileInput.click(),
-  }, svgIcon(ICONS.upload, 18), 'Upload document (.docx, .odt, .txt)') as HTMLButtonElement;
+  }, svgIcon(ICONS.upload, 18), doc ? 'Upload a different document' : 'Upload document (.docx, .odt, .txt)') as HTMLButtonElement;
 
-  // Buttons stay enabled and read the live textarea value on click — typing
-  // doesn't re-render, so a render-time disabled flag would get stuck.
+  // The visible "a document is loaded" state: file name, size, and a way to
+  // clear it. Everything below acts on this document.
+  const loadedCard = doc
+    ? h('div', { class: 'doc-loaded', role: 'status' },
+        svgIcon(ICONS.doc, 20),
+        h('div', { class: 'doc-loaded-info' },
+          h('span', { class: 'doc-loaded-name' }, doc.name),
+          h('span', { class: 'doc-loaded-meta' }, `${wordCount(doc.text).toLocaleString()} words · ready to scan`)),
+        h('button', {
+          class: 'doc-loaded-remove',
+          'aria-label': 'Remove document',
+          onclick: () => { doc = null; resetResults(); notify(); },
+        }, svgIcon(ICONS.x, 18)))
+    : h('p', { class: 'doc-empty-hint' },
+        'No document loaded yet — upload your draft to scan it. It’s read locally on this device, never uploaded.');
+
   const scanBtn = h('button', {
     class: 'btn block',
+    disabled: !doc,
     onclick: () => {
-      docText = textarea.value;
-      if (!docText.trim()) { toast('Paste or upload a draft first'); return; }
+      if (!doc) return;
       conversion = null;
       fileError = null;
       report = rescan();
@@ -236,13 +242,13 @@ export function renderDocument(root: HTMLElement): void {
 
   const convertBtn = h('button', {
     class: 'btn secondary block',
+    disabled: !doc,
     onclick: () => {
-      docText = textarea.value;
-      if (!docText.trim()) { toast('Paste or upload a draft first'); return; }
+      if (!doc) return;
       report = null;
       fileError = null;
       conversion = convertCitations({
-        text: docText,
+        text: doc.text,
         items: state.items.values(),
         format: state.settings.format,
         citekeyPattern: state.settings.citekeyPattern,
@@ -258,7 +264,7 @@ export function renderDocument(root: HTMLElement): void {
   const page = h(
     'div',
     { class: 'page' },
-    h('button', { class: 'back-btn', onclick: () => { reset(); navigate('picker'); }, 'aria-label': 'Back to search' },
+    h('button', { class: 'back-btn', onclick: () => { resetResults(); navigate('picker'); }, 'aria-label': 'Back to search' },
       svgIcon(ICONS.back, 18), 'Back'),
     h('h1', {}, 'Scan document'),
     h('p', {},
@@ -268,7 +274,7 @@ export function renderDocument(root: HTMLElement): void {
       ' turns plain-text citations like (Meier, 2021) into markers so the desktop ODF-Scan pass and the reference list pick them up.'),
     h('div', { class: 'doc-upload' }, uploadBtn, fileInput),
     fileError ? h('p', { class: 'doc-file-error', role: 'alert' }, fileError) : null,
-    textarea,
+    loadedCard,
     h('div', { class: 'doc-actions' }, scanBtn, convertBtn),
     results,
   );

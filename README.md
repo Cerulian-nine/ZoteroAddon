@@ -63,9 +63,9 @@ Citation style defaults to APA 7th edition; a handful of other common styles (ML
 
 ## Scan document (check and repair a draft)
 
-The document icon in the top bar opens **Scan document** — paste a draft (or the whole thing) and run either pass. Nothing is uploaded; the text is read entirely on-device.
+The document icon in the top bar opens **Scan document** — upload a draft (.docx, .odt, .txt or .md; a card shows which document is loaded) and run either pass. Nothing is uploaded to a server; the file is read entirely on-device.
 
-- **Scan document** reads the markers already in the pasted text and reconciles them against your bibliography list. It tells you how many sources are cited, which cited sources are **missing from the bibliography** (so the reference list would leave them out — one tap adds them all), which listed sources **aren't cited** anywhere (orphans), and which markers point at items this device **hasn't synced** (from another device or an un-added library).
+- **Scan document** reads the markers already in the uploaded draft and reconciles them against your bibliography list. It tells you how many sources are cited, which cited sources are **missing from the bibliography** (so the reference list would leave them out — one tap adds them all), which listed sources **aren't cited** anywhere (orphans), and which markers point at items this device **hasn't synced** (from another device or an un-added library).
 - **Convert citations to markers** finds plain-text author-year citations — `(Meier, 2021, pp. 44–46)`, `(Kraus & Berger, 2023)`, or the narrative form `Meier (2021)` — and rewrites each as a proper marker, carrying the page locator through. This is the bridge for a draft written with the plain-text copy format (or typed by hand): convert, paste the result back, and the ODF-Scan desktop pass and the Bibliography screen can finally see those citations.
 
 Conversion is **best-effort and safe**: a citation is only rewritten when it maps to exactly one library item. Anything ambiguous (several sources share the author and year) or unknown (no match) is left exactly as it was and listed for you to fix from the picker. Markers already in the draft are never touched — the `(2023)` inside an existing marker's readable cite is not mistaken for a fresh citation.
