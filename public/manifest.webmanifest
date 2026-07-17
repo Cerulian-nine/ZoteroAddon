@@ -1,6 +1,6 @@
 {
-  "name": "CitePocket",
-  "short_name": "CitePocket",
+  "name": "ZoteroAddon",
+  "short_name": "ZoteroAddon",
   "description": "A pocket citation picker for Zotero and Google Docs. Search your library, copy a scannable citation marker, keep writing.",
   "start_url": "./",
   "scope": "./",

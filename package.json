@@ -1,5 +1,5 @@
 {
-  "name": "citepocket",
+  "name": "zoteroaddon",
   "version": "1.0.0",
   "description": "A companion citation picker for Zotero + Google Docs on Android. Copies RTF/ODF-Scan citation markers to the clipboard.",
   "type": "module",

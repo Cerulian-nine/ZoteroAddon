@@ -97,7 +97,7 @@ export function renderSettings(root: HTMLElement): void {
     h('h1', {}, 'Settings'),
 
     h('h2', {}, 'Zotero connection'),
-    h('p', {}, 'A read-only key is all CitePocket needs. It stays on this device.'),
+    h('p', {}, 'A read-only key is all ZoteroAddon needs. It stays on this device.'),
     h('div', { class: 'field' }, h('label', {}, 'API key'), keyInput),
     h('div', { class: 'field' }, h('label', {}, 'User ID'), idInput),
     credErrorEl,
@@ -135,7 +135,7 @@ export function renderSettings(root: HTMLElement): void {
       {
         class: 'btn danger block',
         onclick: async () => {
-          if (!confirm('Delete all local CitePocket data, including your API key?')) return;
+          if (!confirm('Delete all local ZoteroAddon data, including your API key?')) return;
           await resetAllData();
           location.reload();
         },

@@ -77,7 +77,7 @@ function stepConnect(): HTMLElement {
     {},
     h('span', { class: 'step-eyebrow' }, 'Step 1 of 3'),
     h('h1', {}, 'Connect Zotero'),
-    h('p', {}, 'CitePocket reads your library straight from Zotero. Create a key at ',
+    h('p', {}, 'ZoteroAddon reads your library straight from Zotero. Create a key at ',
       h('a', { href: 'https://www.zotero.org/settings/keys', target: '_blank', rel: 'noopener' }, 'zotero.org/settings/keys'),
       ' — ', h('strong', {}, 'read-only is all it needs'), ', so leave the write permissions unchecked.'),
     h('div', { class: 'field' }, h('label', {}, 'API key'), keyInput,

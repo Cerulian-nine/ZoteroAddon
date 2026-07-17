@@ -1,4 +1,4 @@
-/* CitePocket service worker.
+/* ZoteroAddon service worker.
  *
  * Strategy:
  *  - Precache the app shell on install.
@@ -12,7 +12,7 @@
  * one readable file.
  */
 
-const CACHE = 'citepocket-v1';
+const CACHE = 'zoteroaddon-v1';
 const SHELL = [
   './',
   './index.html',

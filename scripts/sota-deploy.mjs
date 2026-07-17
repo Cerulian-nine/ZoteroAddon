@@ -8,7 +8,7 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const projectName = process.env.SOTA_PROJECT_NAME || 'citepocket';
+const projectName = process.env.SOTA_PROJECT_NAME || 'zoteroaddon';
 const sota = new SotaClient({ apiKey });
 
 const { projects } = await sota.listProjects({ limit: 100 });

@@ -13,7 +13,7 @@ import type { ItemStore } from './zotero';
  * api.zotero.org.
  */
 
-const DB_NAME = 'citepocket';
+const DB_NAME = 'zoteroaddon';
 const DB_VERSION = 1;
 const RECENTS_CAP = 15;
 

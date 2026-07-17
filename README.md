@@ -1,10 +1,10 @@
-# CitePocket
+# ZoteroAddon
 
 A pocket citation picker for academics who write in **Google Docs on an Android tablet** and keep their references in **Zotero**.
 
-Zotero's word-processor integration doesn't exist on Android — no browser-extension surface for the Connector, no add-in surface in the mobile apps. CitePocket works around that with a clipboard workflow:
+Zotero's word-processor integration doesn't exist on Android — no browser-extension surface for the Connector, no add-in surface in the mobile apps. ZoteroAddon works around that with a clipboard workflow:
 
-1. Open CitePocket (in split-screen next to Docs).
+1. Open ZoteroAddon (in split-screen next to Docs).
 2. Type a few letters of an author or year.
 3. Tap the reference, optionally add a page number, **Copy**.
 4. Paste the plain-text citation marker into your doc and keep writing.
@@ -16,7 +16,7 @@ The whole app is tuned for one metric: **under 5 seconds from opening to having 
 
 ## The roundtrip, end to end
 
-**On the tablet**, CitePocket copies a *Scannable Cite* marker — five pipe-separated fields inside curly braces:
+**On the tablet**, ZoteroAddon copies a *Scannable Cite* marker — five pipe-separated fields inside curly braces:
 
 ```
 { | Kraus & Berger, (2023) |pp. 44-46 | |zu:1234567:ABCD1234}
@@ -63,7 +63,7 @@ npm run preview    # serve the production build locally
 
 First run in the app itself:
 
-1. Create a **read-only** API key at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) (your numeric userID is shown on the same page — CitePocket can also read it from the key automatically).
+1. Create a **read-only** API key at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) (your numeric userID is shown on the same page — ZoteroAddon can also read it from the key automatically).
 2. Paste the key into onboarding. It's validated against `GET /keys/current` before you can continue.
 3. Pick a copy format, try the test marker, and let the library sync.
 
@@ -71,7 +71,7 @@ First run in the app itself:
 
 The build output in `dist/` is a fully static site — no backend, no environment variables, no build-time secrets. The Vite config uses a relative `base`, so it works from a domain root **or** a subpath:
 
-- **GitHub Pages**: push `dist/` to a `gh-pages` branch (or use an action). Project pages (`user.github.io/citepocket/`) work out of the box.
+- **GitHub Pages**: push `dist/` to a `gh-pages` branch (or use an action). Project pages (`user.github.io/zoteroaddon/`) work out of the box.
 - **Netlify / Vercel / Cloudflare Pages**: build command `npm run build`, publish directory `dist`.
 - Any web server that can serve files over **HTTPS** (required for service workers and the async clipboard API).
 
@@ -130,8 +130,8 @@ Keyboard operable throughout, `:focus-visible` outlines, ARIA labels on all icon
 
 - **Google Docs paste is plain text — by design.** The marker is inert until the desktop conversion pass; don't edit the final URI field.
 - **The Docs file must be downloaded as `.odt`/`.docx` for conversion.** RTF/ODF-Scan can't reach into a live Google Doc.
-- **Pandoc citekeys are approximations.** CitePocket cannot read Better BibTeX's pinned keys through the Zotero Web API, so generated keys can drift from your BBT keys (e.g. disambiguation suffixes like `kraus2023a`). Align the pattern in Settings and spot-check.
+- **Pandoc citekeys are approximations.** ZoteroAddon cannot read Better BibTeX's pinned keys through the Zotero Web API, so generated keys can drift from your BBT keys (e.g. disambiguation suffixes like `kraus2023a`). Align the pattern in Settings and spot-check.
 - **The plain-text format is not CSL.** It's a simple author-year approximation, not a rendered style.
 - **Group sync fetches all groups the key can access.** Very large group sets make the first sync slower; incremental refreshes stay cheap.
-- **Split-screen clipboard quirks.** A few Android WebView contexts deny the async clipboard API; CitePocket falls back to a tap-to-select box.
+- **Split-screen clipboard quirks.** A few Android WebView contexts deny the async clipboard API; ZoteroAddon falls back to a tap-to-select box.
 - No collection browsing, metadata editing, PDF viewing, or citation-style preview — deliberately (see the spec's non-goals).
