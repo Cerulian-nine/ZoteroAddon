@@ -29,6 +29,18 @@ async function boot(): Promise<void> {
 
 void boot();
 
+// Ask the browser to make our IndexedDB storage durable. Without this,
+// Chrome (Android in particular) treats the origin as "best-effort" and
+// can silently evict it — settings, API key, and the whole cache — under
+// storage pressure or after a stretch of inactivity, which reads to the
+// user as "the API key is gone every time I open the page." Persisted
+// origins are exempt from that eviction.
+if (navigator.storage?.persist) {
+  void navigator.storage.persist().then((granted) => {
+    if (!granted) console.warn('Persistent storage was not granted; local data may be evicted.');
+  });
+}
+
 // PWA: register the service worker (production builds only — Vite dev
 // serves from memory and a SW would just get in the way).
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

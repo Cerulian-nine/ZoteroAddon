@@ -110,6 +110,7 @@ The app is three screens with no shared component tree, no complex reconciliatio
 ## Privacy & security
 
 - Your API key is stored **only** in IndexedDB on the device and sent **only** to `api.zotero.org`.
+- On boot, CitePocket requests [persistent storage](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) (`navigator.storage.persist()`) so Chrome won't silently evict that IndexedDB data under storage pressure or after a period of inactivity — the most common cause of "my API key disappeared" on Android.
 - No analytics, no tracking, no third-party requests of any kind.
 - The UI recommends read-only keys; the app never issues a write request.
 - "Reset all local data" in Settings wipes the cache, recents, and key.
