@@ -490,6 +490,23 @@ a { color: var(--accent); }
   font-size: 13px;
   margin-top: 10px;
 }
+.doc-upload { margin: 4px 0 0; }
+.doc-upload .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.doc-file-error {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--marker-bg);
+  border: 1px solid var(--danger);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
 .doc-actions { display: grid; gap: 8px; margin: 12px 0 4px; }
 .doc-results:empty { display: none; }
 .doc-results { margin-bottom: 96px; }
