@@ -56,7 +56,15 @@ per the owner's instruction on 2026-07-17.
   document** (.docx / .odt / .txt/.md) parses the file in-browser and
   holds the text in module state; a loaded-document card (file icon,
   name, word count, remove ×) shows what's loaded, and Scan/Convert stay
-  disabled until a document is. Nothing is uploaded or stored.
+  disabled until a document is. Nothing is uploaded or stored. After a
+  Convert pass the marked-up text can be **downloaded** as
+  `<name>-markers.txt` (`downloadTextFile`, an on-device Blob download) as
+  well as copied. Unknown plain-text citations (no library match) get a
+  **Look up on Zotero** button: it quick-searches the library online
+  (`lookupOnlineSources` → `zotero.searchItems`, `qmode=titleCreatorYear`,
+  personal + groups) and shows each found candidate beside its unknown
+  citation, to add one-by-one or in bulk (`addFoundSources` caches the item
+  locally + adds it to the bibliography, so re-running Convert markers it).
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain

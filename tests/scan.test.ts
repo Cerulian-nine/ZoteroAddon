@@ -165,7 +165,7 @@ describe('convertCitations', () => {
   it('leaves an unknown citation untouched and reports it', () => {
     const res = convertCitations({ text: 'A claim (Nobody, 1999).', items: lib, format: 'odf-scan' });
     expect(res.text).toBe('A claim (Nobody, 1999).');
-    expect(res.unmatched).toEqual([{ original: '(Nobody, 1999)', reason: 'no-match' }]);
+    expect(res.unmatched).toEqual([{ original: '(Nobody, 1999)', reason: 'no-match', query: 'Nobody 1999' }]);
   });
 
   it('leaves an ambiguous citation untouched and reports the candidate count', () => {

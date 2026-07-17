@@ -75,6 +75,24 @@ export async function copyHtml(html: string, text: string): Promise<boolean> {
   }
 }
 
+/**
+ * Trigger a browser download of `text` as a plain-text file. Used to hand the
+ * converted document (markers spliced in) back to the user as a file, entirely
+ * on-device — no server round-trip, nothing uploaded.
+ */
+export function downloadTextFile(filename: string, text: string): void {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke on the next tick, once the download has started.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 /** Short haptic tick on copy, where supported (guarded per spec). */
 export function vibrate(): void {
   try {

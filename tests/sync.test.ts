@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { syncLibrary, apiGet, type ItemStore, type FetchLike } from '../src/lib/zotero';
+import { syncLibrary, searchItems, apiGet, type ItemStore, type FetchLike } from '../src/lib/zotero';
 import type { CachedItem, LibraryRef } from '../src/lib/types';
 
 /* ---------------- helpers ---------------- */
@@ -180,6 +180,37 @@ describe('syncLibrary — incremental sync', () => {
     const { store, items } = memoryStore();
     await syncLibrary(store, { type: 'group', id: 77 }, { apiKey: 'k', fetchFn, sleepFn: noSleep });
     expect(items.has('g:77:G1')).toBe(true);
+  });
+});
+
+describe('searchItems — online quick search', () => {
+  it('queries titleCreatorYear and returns parsed items', async () => {
+    let requested = '';
+    const fetchFn: FetchLike = async (url) => {
+      requested = url;
+      return jsonResponse([apiItem('FOUND1', 'A Found Paper', 'Nobody', 1999)]);
+    };
+    const items = await searchItems('k', USER_LIB, 'Nobody 1999', fetchFn);
+    expect(requested).toContain('/users/42/items/top');
+    expect(requested).toContain('qmode=titleCreatorYear');
+    expect(requested).toContain('q=Nobody+1999');
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('u:42:FOUND1');
+    expect(items[0].creatorLastNames).toEqual(['nobody']);
+  });
+
+  it('throws a friendly error on 403', async () => {
+    const fetchFn: FetchLike = async () => new Response('Forbidden', { status: 403 });
+    await expect(searchItems('bad', USER_LIB, 'x 2000', fetchFn)).rejects.toThrow(/API key/);
+  });
+
+  it('searches group libraries with the group prefix', async () => {
+    const fetchFn: FetchLike = async (url) => {
+      expect(url).toContain('/groups/77/items/top');
+      return jsonResponse([apiItem('G9', 'Group Find', 'Grp', 2022)]);
+    };
+    const items = await searchItems('k', { type: 'group', id: 77 }, 'Grp 2022', fetchFn);
+    expect(items[0].id).toBe('g:77:G9');
   });
 });
 
