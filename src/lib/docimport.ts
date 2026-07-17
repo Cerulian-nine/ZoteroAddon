@@ -132,27 +132,59 @@ function extensionOf(name: string): string {
 }
 
 /**
+ * What we'll actually parse the file as. `doc` is a recognised-but-rejected
+ * kind so we can give the "save as .docx" message instead of the generic one.
+ */
+type DocKind = DocFormat | 'doc';
+
+/** Filename extension → kind. */
+const EXT_KIND: Record<string, DocKind> = {
+  txt: 'txt', md: 'txt', markdown: 'txt', text: 'txt',
+  docx: 'docx', odt: 'odt', doc: 'doc',
+};
+
+/**
+ * MIME type → kind, used as a fallback when the extension is missing or
+ * unknown. Android content providers routinely hand over a file whose display
+ * name has no extension (a `content://` URI resolved to a generic name), so
+ * without this a perfectly good .docx/.txt would be rejected as "unsupported".
+ */
+const MIME_KIND: Record<string, DocKind> = {
+  'text/plain': 'txt',
+  'text/markdown': 'txt',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/msword': 'doc',
+};
+
+/**
  * Turn an uploaded file into plain text, entirely on-device. Rejects formats
  * we can't read reliably with a message meant to be shown to the user.
+ *
+ * The format is decided by the filename extension first, then by the file's
+ * MIME type — the extension is authoritative when present, but the MIME
+ * fallback keeps uploads working for the extension-less files common on
+ * Android.
  */
 export async function readDocumentFile(file: File): Promise<ImportedDocument> {
   const ext = extensionOf(file.name);
+  const kind = EXT_KIND[ext] ?? MIME_KIND[file.type] ?? null;
 
-  if (ext === 'txt' || ext === 'md' || ext === 'markdown' || ext === 'text') {
+  if (kind === 'txt') {
     return { text: (await file.text()).trim(), format: 'txt', name: file.name };
   }
 
-  if (ext === 'docx') {
+  if (kind === 'docx') {
     const buf = new Uint8Array(await file.arrayBuffer());
     return { text: extractDocxText(zipEntryText(buf, 'word/document.xml')), format: 'docx', name: file.name };
   }
 
-  if (ext === 'odt') {
+  if (kind === 'odt') {
     const buf = new Uint8Array(await file.arrayBuffer());
     return { text: extractOdtText(zipEntryText(buf, 'content.xml')), format: 'odt', name: file.name };
   }
 
-  if (ext === 'doc') {
+  if (kind === 'doc') {
     throw new DocImportError(
       'The old .doc format can’t be read in the browser. Open it in Word or Google Docs and “Save As” .docx, then upload that.',
     );
@@ -163,5 +195,17 @@ export async function readDocumentFile(file: File): Promise<ImportedDocument> {
   );
 }
 
-/** File-picker `accept` string matching the formats readDocumentFile handles. */
-export const ACCEPTED_DOC_TYPES = '.docx,.odt,.txt,.md,.markdown,.text';
+/**
+ * File-picker `accept` string matching the formats readDocumentFile handles.
+ * Extensions *and* MIME types are both listed: on Android the file chooser
+ * routes through providers (Drive, Downloads, the Files app) that filter by
+ * MIME type, and an extension-only list greys out the very documents the user
+ * is trying to pick.
+ */
+export const ACCEPTED_DOC_TYPES = [
+  '.docx', '.odt', '.txt', '.md', '.markdown', '.text',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'text/plain',
+  'text/markdown',
+].join(',');

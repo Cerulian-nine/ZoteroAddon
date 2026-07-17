@@ -69,7 +69,11 @@ per the owner's instruction on 2026-07-17.
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain
   text: .docx/.odt unzipped with `fflate` and their XML text extracted,
-  .txt read as-is, legacy .doc rejected with a "save as .docx" message),
+  .txt read as-is, legacy .doc rejected with a "save as .docx" message;
+  format is chosen by extension first, then by MIME type as a fallback so
+  extension-less files from Android content providers still import, and
+  `ACCEPTED_DOC_TYPES` lists MIME types alongside extensions so Android's
+  file chooser doesn't grey out valid documents),
   `bibliography.ts`, `search.ts`, `zotero.ts`, `db.ts`, `creators.ts`,
   `clipboard.ts`. Pure logic is unit-tested (`tests/`, vitest).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub
