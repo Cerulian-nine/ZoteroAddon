@@ -4,6 +4,7 @@ import { renderPicker } from './ui/picker';
 import { renderOnboarding } from './ui/onboarding';
 import { renderSettings } from './ui/settings';
 import { renderBibliography } from './ui/bibliography';
+import { renderDocument } from './ui/document';
 
 const root = document.getElementById('app')!;
 
@@ -13,6 +14,7 @@ function render(): void {
     case 'onboarding': renderOnboarding(root); break;
     case 'settings': renderSettings(root); break;
     case 'bibliography': renderBibliography(root); break;
+    case 'document': renderDocument(root); break;
   }
 }
 

@@ -61,6 +61,15 @@ Citation style defaults to APA 7th edition; a handful of other common styles (ML
 
 ---
 
+## Scan document (check and repair a draft)
+
+The document icon in the top bar opens **Scan document** — paste a draft (or the whole thing) and run either pass. Nothing is uploaded; the text is read entirely on-device.
+
+- **Scan document** reads the markers already in the pasted text and reconciles them against your bibliography list. It tells you how many sources are cited, which cited sources are **missing from the bibliography** (so the reference list would leave them out — one tap adds them all), which listed sources **aren't cited** anywhere (orphans), and which markers point at items this device **hasn't synced** (from another device or an un-added library).
+- **Convert citations to markers** finds plain-text author-year citations — `(Meier, 2021, pp. 44–46)`, `(Kraus & Berger, 2023)`, or the narrative form `Meier (2021)` — and rewrites each as a proper marker, carrying the page locator through. This is the bridge for a draft written with the plain-text copy format (or typed by hand): convert, paste the result back, and the ODF-Scan desktop pass and the Bibliography screen can finally see those citations.
+
+Conversion is **best-effort and safe**: a citation is only rewritten when it maps to exactly one library item. Anything ambiguous (several sources share the author and year) or unknown (no match) is left exactly as it was and listed for you to fix from the picker. Markers already in the draft are never touched — the `(2023)` inside an existing marker's readable cite is not mistaken for a fresh citation.
+
 ## Setup
 
 ```bash
@@ -95,6 +104,9 @@ src/
     marker.ts        formatMarker() — ALL output syntax lives here, unit-tested
     bibliography.ts  fetchBibliography() — Zotero's format=bib&style=… CSL
                       rendering, chunked by library/50-key limit, HTML→text
+    scan.ts          parseMarkers()/scanDocument()/convertCitations() —
+                      document marker parsing, cited-vs-bibliography
+                      reconciliation, plain-text→marker substitution
     search.ts        tokenizer + in-memory prefix index (instant at 5,000+ items)
     zotero.ts        Web API v3 client: pagination, ?since= incremental sync,
                       Backoff/Retry-After handling, /deleted reconciliation
@@ -140,6 +152,7 @@ Keyboard operable throughout, `:focus-visible` outlines, ARIA labels on all icon
 
 - `formatMarker` — all three formats, locator/no-locator, locator normalization, group (`zg:`) vs. user (`zu:`) libraries, multi-cite output, fallbacks for missing metadata;
 - `fetchBibliography` — `format=bib` request shape per library, 50-key chunking, csl-entry extraction, HTML→plain-text conversion, and Zotero error handling (invalid style, forbidden key);
+- `scan.ts` — marker parsing (offsets, `zu:`/`zg:`→id mapping, rejecting non-markers), `scanDocument` reconciliation (cited counts, missing-from-bibliography, orphans, unresolved markers), and `convertCitations` (parenthetical, multi-source and narrative citations, locator carry-through, ambiguity/no-match handling, diacritic-folded matching, and leaving existing markers untouched);
 - the search tokenizer and index — prefix matching, AND semantics, diacritic folding, ranking, and a 5,500-item performance budget;
 - the sync engine — pagination, headers, `?since=` increments, `/deleted` reconciliation, `304` handling, `403` errors, `Backoff`/`Retry-After`.
 

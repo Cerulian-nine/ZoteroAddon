@@ -8,7 +8,7 @@ import { syncLibrary, listGroups, type SyncProgress } from './lib/zotero';
  * re-render themselves from it. No framework required at this size.
  */
 
-export type Screen = 'picker' | 'onboarding' | 'settings' | 'bibliography';
+export type Screen = 'picker' | 'onboarding' | 'settings' | 'bibliography' | 'document';
 
 export interface AppState {
   screen: Screen;
@@ -96,6 +96,16 @@ export async function addToBibliographyList(itemIdValue: string): Promise<void> 
   await db.addToBibliography(itemIdValue);
   state.bibliography = await db.getBibliographyItems();
   notify();
+}
+
+/** Add several items at once (document scan → reconcile the bibliography). */
+export async function addManyToBibliographyList(itemIdValues: string[]): Promise<number> {
+  const inBib = new Set(state.bibliography.map((e) => e.id));
+  const toAdd = itemIdValues.filter((id) => !inBib.has(id));
+  await Promise.all(toAdd.map((id) => db.addToBibliography(id)));
+  state.bibliography = await db.getBibliographyItems();
+  notify();
+  return toAdd.length;
 }
 
 export async function removeFromBibliographyList(itemIdValue: string): Promise<void> {
