@@ -68,10 +68,16 @@ per the owner's instruction on 2026-07-17.
   `qmode=titleCreatorYear`, personal + groups) — those hits are addable as
   markers (`addFoundSources` caches + bibliographies them); then, only when
   the library has no hit, a **Crossref** fallback (`lookupCrossrefSources`
-  → `lib/crossref.searchCrossref`, `api.crossref.org`, no key) that is
-  *identify-only* (a Crossref work has no Zotero item key, so it can't
-  become a marker) — it shows the reference + DOI so the user can add it to
-  Zotero and re-sync.
+  → `lib/crossref.searchCrossref`, `api.crossref.org`, no key). What a
+  Crossref hit offers depends on the key's write access
+  (`settings.writeAccess`, detected from `/keys/current` `access.user.write`
+  during onboarding/settings save): with **write access**, an
+  **Add to Zotero** button (`addCrossrefToZotero` →
+  `crossref.crossrefToZoteroItem` maps the work to a Zotero item type →
+  `zotero.createItems` POSTs it to the personal library, then caches +
+  bibliographies it, so a re-run Convert markers it); with a **read-only**
+  key it stays identify-only (reference + DOI, add it in Zotero yourself).
+  `createItems` is the app's only write, and only on that explicit tap.
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
   plain-text→marker conversion), `docimport.ts` (uploaded file → plain
@@ -81,8 +87,10 @@ per the owner's instruction on 2026-07-17.
   extension-less files from Android content providers still import, and
   `ACCEPTED_DOC_TYPES` lists MIME types alongside extensions so Android's
   file chooser doesn't grey out valid documents),
-  `crossref.ts` (Crossref DOI-registry search for the document scanner's
-  identify-only fallback), `bibliography.ts`, `search.ts`, `zotero.ts`,
+  `crossref.ts` (Crossref DOI-registry search + `crossrefToZoteroItem`
+  mapper for the document scanner's fallback), `bibliography.ts`,
+  `search.ts`, `zotero.ts` (Web API client/sync + `createItems` write +
+  `validateKey` write-access detection),
   `db.ts`, `creators.ts`, `clipboard.ts` (copy + `saveTextFile`/
   `downloadTextFile`). Pure logic is unit-tested (`tests/`, vitest).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub

@@ -32,8 +32,9 @@ export function renderSettings(root: HTMLElement): void {
           state.settings = await saveSettings({
             apiKey: keyInput.value.trim(),
             userId: Number(idInput.value.trim()) || info.userID,
+            writeAccess: info.write,
           });
-          toast('Zotero connection updated');
+          toast(info.write ? 'Zotero connection updated — write access on' : 'Zotero connection updated');
         } catch (err) {
           credError = err instanceof ZoteroApiError ? err.message : 'Validation failed.';
         }
@@ -97,9 +98,16 @@ export function renderSettings(root: HTMLElement): void {
     h('h1', {}, 'Settings'),
 
     h('h2', {}, 'Zotero connection'),
-    h('p', {}, 'A read-only key is all CitePocket needs. It stays on this device.'),
+    h('p', {}, 'A read-only key is all CitePocket needs to cite. It stays on this device. Add ',
+      h('strong', {}, '“Allow write access”'), ' to let it save sources found on Crossref straight to your Zotero.'),
     h('div', { class: 'field' }, h('label', {}, 'API key'), keyInput),
     h('div', { class: 'field' }, h('label', {}, 'User ID'), idInput),
+    h('p', { class: 'settings-meta' },
+      s.apiKey
+        ? (s.writeAccess
+            ? '✓ This key has write access — sources found on Crossref can be added to Zotero in one tap.'
+            : 'This key is read-only. Enable write access on it at zotero.org/settings/keys and re-save here to add Crossref finds automatically.')
+        : ''),
     credErrorEl,
     saveCreds,
 
