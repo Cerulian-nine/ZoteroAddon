@@ -7,6 +7,7 @@ import {
   type ConversionResult,
 } from '../lib/scan';
 import { copyText, vibrate } from '../lib/clipboard';
+import { readDocumentFile, DocImportError, ACCEPTED_DOC_TYPES } from '../lib/docimport';
 import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
 
 /**
@@ -25,10 +26,12 @@ import { h, toast, svgIcon, ICONS, showClipboardFallback } from './dom';
 let docText = '';
 let report: ScanReport | null = null;
 let conversion: ConversionResult | null = null;
+let fileError: string | null = null;
 
 function reset(): void {
   report = null;
   conversion = null;
+  fileError = null;
 }
 
 function itemLine(item: CachedItem, extra?: string): HTMLElement {
@@ -171,11 +174,51 @@ export function renderDocument(root: HTMLElement): void {
   const textarea = h('textarea', {
     class: 'doc-input',
     rows: '7',
-    placeholder: 'Paste your draft here — the markers and citations in it will be read locally, never uploaded.',
+    placeholder: 'Paste your draft here, or use “Upload document” above — either way it’s read locally on this device, never uploaded.',
     'aria-label': 'Document text to scan',
     oninput: (e: Event) => { docText = (e.target as HTMLTextAreaElement).value; },
   }) as HTMLTextAreaElement;
   textarea.value = docText;
+
+  // Upload a .docx/.odt/.txt file instead of copy-pasting. The file is parsed
+  // in-browser (lib/docimport) and its text drops into the same textarea; the
+  // file itself is never uploaded or stored.
+  let uploadBtn: HTMLButtonElement;
+  const fileInput = h('input', {
+    type: 'file',
+    accept: ACCEPTED_DOC_TYPES,
+    class: 'visually-hidden',
+    'aria-hidden': 'true',
+    tabindex: '-1',
+    onchange: async (e: Event) => {
+      const input = e.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = ''; // let the same file be re-picked later
+      if (!file) return;
+      uploadBtn.setAttribute('disabled', '');
+      uploadBtn.textContent = 'Reading…';
+      try {
+        const doc = await readDocumentFile(file);
+        if (!doc.text.trim()) {
+          fileError = `“${doc.name}” looks empty — no text to scan.`;
+        } else {
+          docText = doc.text;
+          reset();
+          toast(`Loaded ${doc.name}`);
+        }
+      } catch (err) {
+        fileError = err instanceof DocImportError
+          ? err.message
+          : 'Couldn’t read that file — try another format, or paste the text.';
+      }
+      notify(); // re-render: shows the loaded text (or the error) and clears stale results
+    },
+  }) as HTMLInputElement;
+
+  uploadBtn = h('button', {
+    class: 'btn secondary block',
+    onclick: () => fileInput.click(),
+  }, svgIcon(ICONS.upload, 18), 'Upload document (.docx, .odt, .txt)') as HTMLButtonElement;
 
   // Buttons stay enabled and read the live textarea value on click — typing
   // doesn't re-render, so a render-time disabled flag would get stuck.
@@ -183,8 +226,9 @@ export function renderDocument(root: HTMLElement): void {
     class: 'btn block',
     onclick: () => {
       docText = textarea.value;
-      if (!docText.trim()) { toast('Paste a draft first'); return; }
+      if (!docText.trim()) { toast('Paste or upload a draft first'); return; }
       conversion = null;
+      fileError = null;
       report = rescan();
       notify();
     },
@@ -194,8 +238,9 @@ export function renderDocument(root: HTMLElement): void {
     class: 'btn secondary block',
     onclick: () => {
       docText = textarea.value;
-      if (!docText.trim()) { toast('Paste a draft first'); return; }
+      if (!docText.trim()) { toast('Paste or upload a draft first'); return; }
       report = null;
+      fileError = null;
       conversion = convertCitations({
         text: docText,
         items: state.items.values(),
@@ -221,6 +266,8 @@ export function renderDocument(root: HTMLElement): void {
       ' reads the markers already in a draft and checks them against your bibliography list. ',
       h('strong', {}, 'Convert citations'),
       ' turns plain-text citations like (Meier, 2021) into markers so the desktop ODF-Scan pass and the reference list pick them up.'),
+    h('div', { class: 'doc-upload' }, uploadBtn, fileInput),
+    fileError ? h('p', { class: 'doc-file-error', role: 'alert' }, fileError) : null,
     textarea,
     h('div', { class: 'doc-actions' }, scanBtn, convertBtn),
     results,

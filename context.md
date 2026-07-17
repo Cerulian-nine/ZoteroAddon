@@ -50,13 +50,19 @@ per the owner's instruction on 2026-07-17.
   Web API and copies it as rich text.
 - **Screens** (`src/ui/`, vanilla TS, one mutable store in `src/app.ts`):
   picker, onboarding, settings, bibliography, and **document** (Scan
-  document — reconcile the markers in a pasted draft against the
-  bibliography list, and convert plain-text citations into markers).
+  document — reconcile the markers in a pasted-or-uploaded draft against
+  the bibliography list, and convert plain-text citations into markers).
+  The document screen takes a draft two ways: paste into the textarea, or
+  **Upload document** (.docx / .odt / .txt/.md) — the file is parsed
+  in-browser and its text fills the same textarea; nothing is uploaded or
+  stored.
 - **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
   (document marker parsing + cited-vs-bibliography reconciliation +
-  plain-text→marker conversion), `bibliography.ts`, `search.ts`,
-  `zotero.ts`, `db.ts`, `creators.ts`, `clipboard.ts`. Pure logic is
-  unit-tested (`tests/`, vitest).
+  plain-text→marker conversion), `docimport.ts` (uploaded file → plain
+  text: .docx/.odt unzipped with `fflate` and their XML text extracted,
+  .txt read as-is, legacy .doc rejected with a "save as .docx" message),
+  `bibliography.ts`, `search.ts`, `zotero.ts`, `db.ts`, `creators.ts`,
+  `clipboard.ts`. Pure logic is unit-tested (`tests/`, vitest).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub
   Action above. Project ID is pinned in the workflow file.
 - No backend, no build-time secrets beyond `SOTA_API_KEY` (GitHub Actions
