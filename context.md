@@ -62,7 +62,9 @@ per the owner's instruction on 2026-07-17.
   text: .docx/.odt unzipped with `fflate` and their XML text extracted,
   .txt read as-is, legacy .doc rejected with a "save as .docx" message),
   `bibliography.ts`, `search.ts`, `zotero.ts`, `db.ts`, `creators.ts`,
-  `clipboard.ts`. Pure logic is unit-tested (`tests/`, vitest).
+  `clipboard.ts`. Pure logic is unit-tested (`tests/`, vitest); the Scan
+  screen's upload/re-render wiring has a jsdom test
+  (`tests/document.test.ts`, `@vitest-environment jsdom`).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub
   Action above. Project ID is pinned in the workflow file.
 - No backend, no build-time secrets beyond `SOTA_API_KEY` (GitHub Actions

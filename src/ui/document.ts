@@ -197,13 +197,17 @@ export function renderDocument(root: HTMLElement): void {
       if (!file) return;
       uploadBtn.setAttribute('disabled', '');
       uploadBtn.textContent = 'Reading…';
+      reset(); // drop any previous report/conversion/error before this upload
       try {
         const doc = await readDocumentFile(file);
         if (!doc.text.trim()) {
           fileError = `“${doc.name}” looks empty — no text to scan.`;
         } else {
           docText = doc.text;
-          reset();
+          // Sync the live textarea too: the re-render below reads the current
+          // textarea back into docText (to preserve in-progress typing), which
+          // would otherwise clobber the text we just loaded with the empty box.
+          textarea.value = doc.text;
           toast(`Loaded ${doc.name}`);
         }
       } catch (err) {
