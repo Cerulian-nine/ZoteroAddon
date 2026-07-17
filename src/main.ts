@@ -3,6 +3,7 @@ import { state, subscribe, loadFromCache, runSync } from './app';
 import { renderPicker } from './ui/picker';
 import { renderOnboarding } from './ui/onboarding';
 import { renderSettings } from './ui/settings';
+import { renderBibliography } from './ui/bibliography';
 
 const root = document.getElementById('app')!;
 
@@ -11,6 +12,7 @@ function render(): void {
     case 'picker': renderPicker(root); break;
     case 'onboarding': renderOnboarding(root); break;
     case 'settings': renderSettings(root); break;
+    case 'bibliography': renderBibliography(root); break;
   }
 }
 

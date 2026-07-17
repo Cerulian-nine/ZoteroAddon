@@ -219,12 +219,17 @@ export function renderPicker(root: HTMLElement): void {
   );
 
   const wrap = h('div', { class: `search-wrap${liveValue ? ' has-text' : ''}` }, input, clearBtn);
+  const bibBtn = h(
+    'button',
+    { class: 'gear-btn', 'aria-label': 'Bibliography', onclick: () => navigate('bibliography') },
+    svgIcon(ICONS.list),
+  );
   const gear = h(
     'button',
     { class: 'gear-btn', 'aria-label': 'Settings', onclick: () => navigate('settings') },
     svgIcon(ICONS.gear),
   );
-  root.append(h('div', { class: 'topbar' }, wrap, gear));
+  root.append(h('div', { class: 'topbar' }, wrap, bibBtn, gear));
 
   /* status strip */
   const status = h('div', { class: 'status-strip', 'aria-live': 'polite' });
