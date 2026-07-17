@@ -2,7 +2,9 @@
 
 A pocket citation picker for academics who write in **Google Docs on an Android tablet** and keep their references in **Zotero**.
 
-Zotero's word-processor integration doesn't exist on Android — no browser-extension surface for the Connector, no add-in surface in the mobile apps. CitePocket works around that with a clipboard workflow:
+Zotero's word-processor integration doesn't exist on Android — no browser-extension surface for the Connector, no add-in surface in the mobile apps. CitePocket works around that two ways: a clipboard **marker** workflow for inline citations while you write, and a **Bibliography** screen that renders and copies the finished reference list directly — no desktop step required for that part.
+
+### Marker workflow (inline citations while writing)
 
 1. Open CitePocket (in split-screen next to Docs).
 2. Type a few letters of an author or year.
@@ -49,6 +51,14 @@ Selectable during onboarding and in Settings:
 - **Pandoc citekeys** — `[@kraus2023]`, with a configurable key pattern (`[auth]`, `[Auth]`, `[year]`, `[shorttitle]`). This is a *best-effort* generator: make sure the pattern mirrors your Better BibTeX key format, or Pandoc won't resolve the keys.
 - **Plain text** — `(Kraus & Berger, 2023, pp. 44–46)`, a simple author-year approximation for people who finalize citations by hand.
 
+## Bibliography (skip the desktop step)
+
+The list icon next to Settings opens **Bibliography** — a running list of the sources you've cited (every marker copy adds its item automatically; you can also add or remove sources by hand). Tap **Copy bibliography** and CitePocket asks the Zotero Web API to render a full, correctly sorted reference list in your chosen citation style (`format=bib&style=…` — the same CSL processor Zotero itself uses), then copies it as rich text so italics and other formatting survive pasting straight into Google Docs.
+
+This is a separate, simpler path than the marker roundtrip above: no ODF-Scan plugin, no downloading the doc, no desktop machine required — but it does need an internet connection, since the rendering happens on Zotero's servers, and it produces a static reference list rather than the live, renumbering-aware citations ODF-Scan gives you. Pick whichever fits the moment: markers while you're still drafting and might reorder citations, Bibliography once the source list is settled.
+
+Citation style defaults to APA 7th edition; a handful of other common styles (MLA, Chicago, Harvard, IEEE, Vancouver, Nature) are one tap away, and any other [Zotero style repository](https://www.zotero.org/styles) ID can be typed in under "Custom style ID".
+
 ---
 
 ## Setup
@@ -82,23 +92,28 @@ Install it on the tablet via Chrome's "Add to Home Screen". After the first succ
 ```
 src/
   lib/
-    marker.ts     formatMarker() — ALL output syntax lives here, unit-tested
-    search.ts     tokenizer + in-memory prefix index (instant at 5,000+ items)
-    zotero.ts     Web API v3 client: pagination, ?since= incremental sync,
-                  Backoff/Retry-After handling, /deleted reconciliation
-    db.ts         IndexedDB persistence (items, settings, recents) via `idb`
-    creators.ts   creator display strings, year parsing
-    clipboard.ts  async clipboard + execCommand fallback, guarded vibration
-  ui/             picker, onboarding, settings, DOM helpers (vanilla)
-  app.ts          one mutable state store + subscribe/notify re-render
+    marker.ts        formatMarker() — ALL output syntax lives here, unit-tested
+    bibliography.ts  fetchBibliography() — Zotero's format=bib&style=… CSL
+                      rendering, chunked by library/50-key limit, HTML→text
+    search.ts        tokenizer + in-memory prefix index (instant at 5,000+ items)
+    zotero.ts        Web API v3 client: pagination, ?since= incremental sync,
+                      Backoff/Retry-After handling, /deleted reconciliation
+    db.ts            IndexedDB persistence (items, settings, recents,
+                      bibliography list) via `idb`
+    creators.ts      creator display strings, year parsing
+    clipboard.ts     async clipboard (plain text and text/html) +
+                      execCommand fallback, guarded vibration
+  ui/                picker, onboarding, settings, bibliography, DOM helpers
+                      (vanilla)
+  app.ts             one mutable state store + subscribe/notify re-render
 public/
-  sw.js           hand-written service worker (app shell precache,
-                  cache-first assets, api.zotero.org never intercepted)
+  sw.js              hand-written service worker (app shell precache,
+                      cache-first assets, api.zotero.org never intercepted)
 ```
 
 ### Why vanilla TypeScript instead of Preact?
 
-The app is three screens with no shared component tree, no complex reconciliation needs, and a hard "keep the bundle small" requirement. A 40-line `h()` helper plus a subscribe/notify store covers everything the UI does; the entire app ships at ~10.7 kB of gzipped JS *including* the `idb` wrapper. Preact would add ~4.5 kB gzipped and a dependency to track for, essentially, `render()` we can write in one line. If the UI ever grows real component state (it shouldn't — see non-goals), Preact is a drop-in step up since the `h()` signature matches.
+The app is four screens with no shared component tree, no complex reconciliation needs, and a hard "keep the bundle small" requirement. A 40-line `h()` helper plus a subscribe/notify store covers everything the UI does; the entire app ships at ~13 kB of gzipped JS *including* the `idb` wrapper. Preact would add ~4.5 kB gzipped and a dependency to track for, essentially, `render()` we can write in one line. If the UI ever grows real component state (it shouldn't — see non-goals), Preact is a drop-in step up since the `h()` signature matches.
 
 ### Sync design
 
@@ -109,7 +124,7 @@ The app is three screens with no shared component tree, no complex reconciliatio
 
 ## Privacy & security
 
-- Your API key is stored **only** in IndexedDB on the device and sent **only** to `api.zotero.org`.
+- Your API key is stored **only** in IndexedDB on the device and sent **only** to `api.zotero.org` (including the bibliography-rendering requests — no third-party citation service is involved).
 - On boot, CitePocket requests [persistent storage](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist) (`navigator.storage.persist()`) so Chrome won't silently evict that IndexedDB data under storage pressure or after a period of inactivity — the most common cause of "my API key disappeared" on Android.
 - No analytics, no tracking, no third-party requests of any kind.
 - The UI recommends read-only keys; the app never issues a write request.
@@ -124,13 +139,15 @@ Keyboard operable throughout, `:focus-visible` outlines, ARIA labels on all icon
 `npm test` runs vitest suites for:
 
 - `formatMarker` — all three formats, locator/no-locator, locator normalization, group (`zg:`) vs. user (`zu:`) libraries, multi-cite output, fallbacks for missing metadata;
+- `fetchBibliography` — `format=bib` request shape per library, 50-key chunking, csl-entry extraction, HTML→plain-text conversion, and Zotero error handling (invalid style, forbidden key);
 - the search tokenizer and index — prefix matching, AND semantics, diacritic folding, ranking, and a 5,500-item performance budget;
 - the sync engine — pagination, headers, `?since=` increments, `/deleted` reconciliation, `304` handling, `403` errors, `Backoff`/`Retry-After`.
 
 ## Known limitations
 
-- **Google Docs paste is plain text — by design.** The marker is inert until the desktop conversion pass; don't edit the final URI field.
-- **The Docs file must be downloaded as `.odt`/`.docx` for conversion.** RTF/ODF-Scan can't reach into a live Google Doc.
+- **Google Docs paste of a marker is plain text — by design.** The marker is inert until the desktop conversion pass; don't edit the final URI field.
+- **The Docs file must be downloaded as `.odt`/`.docx` for the marker-conversion path.** RTF/ODF-Scan can't reach into a live Google Doc. The Bibliography screen doesn't have this limitation — it skips the desktop step entirely — but it does need an internet connection, since Zotero renders the style server-side.
+- **Bibliography ordering across libraries/chunks is best-effort.** Each request to Zotero is already correctly sorted for the style you picked, but if your list mixes personal and group libraries, or exceeds 50 sources, the pieces are concatenated rather than re-sorted as one unit. Fine for the common case of a single library under 50 sources; for anything larger, sort by hand after pasting.
 - **Pandoc citekeys are approximations.** CitePocket cannot read Better BibTeX's pinned keys through the Zotero Web API, so generated keys can drift from your BBT keys (e.g. disambiguation suffixes like `kraus2023a`). Align the pattern in Settings and spot-check.
 - **The plain-text format is not CSL.** It's a simple author-year approximation, not a rendered style.
 - **Group sync fetches all groups the key can access.** Very large group sets make the first sync slower; incremental refreshes stay cheap.

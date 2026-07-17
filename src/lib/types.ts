@@ -42,6 +42,8 @@ export interface Settings {
   citekeyPattern: string;
   syncGroups: boolean;
   onboarded: boolean;
+  /** CSL style short-name (e.g. "apa") used to render the bibliography. */
+  bibliographyStyle: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
   citekeyPattern: '[auth][year]',
   syncGroups: false,
   onboarded: false,
+  bibliographyStyle: 'apa',
 };
 
 export function itemId(library: LibraryRef, itemKey: string): string {

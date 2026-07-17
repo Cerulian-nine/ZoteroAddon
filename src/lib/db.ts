@@ -5,16 +5,18 @@ import type { ItemStore } from './zotero';
 
 /**
  * Local persistence. Everything lives on-device in IndexedDB:
- *   items    — the cached library (keyed by composite id)
- *   meta     — settings, per-library sync versions, last-sync info
- *   recents  — recently copied items (small, capped)
+ *   items         — the cached library (keyed by composite id)
+ *   meta          — settings, per-library sync versions, last-sync info
+ *   recents       — recently copied items (small, capped MRU list)
+ *   bibliography  — items the user has cited, kept for building a full
+ *                   reference list later (uncapped, unlike recents)
  *
  * The API key never leaves this database except in requests to
  * api.zotero.org.
  */
 
 const DB_NAME = 'citepocket';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const RECENTS_CAP = 15;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
@@ -23,9 +25,10 @@ function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(d) {
-        d.createObjectStore('items', { keyPath: 'id' });
-        d.createObjectStore('meta');
-        d.createObjectStore('recents', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('items')) d.createObjectStore('items', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
+        if (!d.objectStoreNames.contains('recents')) d.createObjectStore('recents', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('bibliography')) d.createObjectStore('bibliography', { keyPath: 'id' });
       },
     });
   }
@@ -124,9 +127,35 @@ export async function touchRecent(itemIdValue: string): Promise<void> {
   }
 }
 
+/* ---------------- bibliography ---------------- */
+
+export interface BibliographyEntry {
+  id: string; // item id
+  addedAt: number;
+}
+
+/** All items currently in the bibliography list, newest-added first. */
+export async function getBibliographyItems(): Promise<BibliographyEntry[]> {
+  const all: BibliographyEntry[] = await (await db()).getAll('bibliography');
+  return all.sort((a, b) => b.addedAt - a.addedAt);
+}
+
+/** Add an item, or bump its addedAt if already present. Uncapped. */
+export async function addToBibliography(itemIdValue: string): Promise<void> {
+  await (await db()).put('bibliography', { id: itemIdValue, addedAt: Date.now() } satisfies BibliographyEntry);
+}
+
+export async function removeFromBibliography(itemIdValue: string): Promise<void> {
+  await (await db()).delete('bibliography', itemIdValue);
+}
+
+export async function clearBibliography(): Promise<void> {
+  await (await db()).clear('bibliography');
+}
+
 /* ---------------- full reset ---------------- */
 
 export async function resetAllData(): Promise<void> {
   const d = await db();
-  await Promise.all([d.clear('items'), d.clear('meta'), d.clear('recents')]);
+  await Promise.all([d.clear('items'), d.clear('meta'), d.clear('recents'), d.clear('bibliography')]);
 }

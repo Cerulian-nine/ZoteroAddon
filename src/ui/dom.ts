@@ -98,4 +98,5 @@ export const ICONS = {
   plus: 'M12 5v14M5 12h14',
   x: 'M18 6L6 18M6 6l12 12',
   back: 'M19 12H5m7-7l-7 7 7 7',
+  list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
 };

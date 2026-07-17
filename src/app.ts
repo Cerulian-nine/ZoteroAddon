@@ -8,7 +8,7 @@ import { syncLibrary, listGroups, type SyncProgress } from './lib/zotero';
  * re-render themselves from it. No framework required at this size.
  */
 
-export type Screen = 'picker' | 'onboarding' | 'settings';
+export type Screen = 'picker' | 'onboarding' | 'settings' | 'bibliography';
 
 export interface AppState {
   screen: Screen;
@@ -16,6 +16,7 @@ export interface AppState {
   items: Map<string, CachedItem>;
   index: IndexedEntry[];
   recents: db.RecentEntry[];
+  bibliography: db.BibliographyEntry[];
   tray: string[]; // item ids in the multi-cite tray
   syncing: boolean;
   syncProgress: SyncProgress | null;
@@ -30,6 +31,7 @@ export const state: AppState = {
   items: new Map(),
   index: [],
   recents: [],
+  bibliography: [],
   tray: [],
   syncing: false,
   syncProgress: null,
@@ -58,16 +60,18 @@ export function navigate(screen: Screen): void {
 /* ---------------- data loading ---------------- */
 
 export async function loadFromCache(): Promise<void> {
-  const [settings, items, recents, lastSync] = await Promise.all([
+  const [settings, items, recents, bibliography, lastSync] = await Promise.all([
     db.getSettings(),
     db.getAllItems(),
     db.getRecents(),
+    db.getBibliographyItems(),
     db.getSyncMeta(),
   ]);
   state.settings = settings;
   state.items = new Map(items.map((i) => [i.id, i]));
   state.index = buildIndex(items);
   state.recents = recents;
+  state.bibliography = bibliography;
   state.lastSync = lastSync ?? null;
   state.screen = settings.onboarded ? 'picker' : 'onboarding';
 }
@@ -79,8 +83,30 @@ export async function refreshItemsFromDb(): Promise<void> {
 }
 
 export async function markCited(itemIdValue: string): Promise<void> {
-  await db.touchRecent(itemIdValue);
-  state.recents = await db.getRecents();
+  await Promise.all([db.touchRecent(itemIdValue), db.addToBibliography(itemIdValue)]);
+  const [recents, bibliography] = await Promise.all([db.getRecents(), db.getBibliographyItems()]);
+  state.recents = recents;
+  state.bibliography = bibliography;
+  notify();
+}
+
+/* ---------------- bibliography list (manual curation) ---------------- */
+
+export async function addToBibliographyList(itemIdValue: string): Promise<void> {
+  await db.addToBibliography(itemIdValue);
+  state.bibliography = await db.getBibliographyItems();
+  notify();
+}
+
+export async function removeFromBibliographyList(itemIdValue: string): Promise<void> {
+  await db.removeFromBibliography(itemIdValue);
+  state.bibliography = await db.getBibliographyItems();
+  notify();
+}
+
+export async function clearBibliographyList(): Promise<void> {
+  await db.clearBibliography();
+  state.bibliography = [];
   notify();
 }
 
