@@ -159,7 +159,7 @@ export async function readDocumentFile(file: File): Promise<ImportedDocument> {
   }
 
   throw new DocImportError(
-    `Unsupported file type “.${ext || '?'}”. Upload a .docx, .odt, .txt or .md file, or paste the text instead.`,
+    `Unsupported file type “.${ext || '?'}”. Upload a .docx, .odt, .txt or .md file.`,
   );
 }
 
