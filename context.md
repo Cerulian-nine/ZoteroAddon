@@ -29,6 +29,13 @@ just do them and report what happened:
 4. Still communicate what you did (this is about not blocking on
    confirmation, not about going silent) — a short summary after pushing /
    opening the PR / merging / deploying is expected.
+5. **Always update this file (`context.md`) after every build.** Whenever you
+   run `npm run build` for a change you're shipping, refresh the "Repo shape"
+   section below so it reflects what now exists (new screens, new `src/lib`
+   modules, changed deploy details). Keep it terse — it's a map, not a
+   changelog. This keeps the file the accurate first-read it's meant to be,
+   and it must land in the same commit/PR as the change that prompted it.
+   (Owner instruction, 2026-07-17.)
 
 This overrides the general default of asking before pushing/merging/
 deploying — it applies specifically to this repo (`cerulian-nine/zoteroaddon`),
@@ -41,6 +48,15 @@ per the owner's instruction on 2026-07-17.
   `README.md` for the full picture — marker-based clipboard workflow, plus
   a Bibliography screen that renders a full reference list via the Zotero
   Web API and copies it as rich text.
+- **Screens** (`src/ui/`, vanilla TS, one mutable store in `src/app.ts`):
+  picker, onboarding, settings, bibliography, and **document** (Scan
+  document — reconcile the markers in a pasted draft against the
+  bibliography list, and convert plain-text citations into markers).
+- **`src/lib/`**: `marker.ts` (all marker output syntax), `scan.ts`
+  (document marker parsing + cited-vs-bibliography reconciliation +
+  plain-text→marker conversion), `bibliography.ts`, `search.ts`,
+  `zotero.ts`, `db.ts`, `creators.ts`, `clipboard.ts`. Pure logic is
+  unit-tested (`tests/`, vitest).
 - Deploy target: sota.io, via `scripts/sota-deploy.mjs` and the GitHub
   Action above. Project ID is pinned in the workflow file.
 - No backend, no build-time secrets beyond `SOTA_API_KEY` (GitHub Actions
